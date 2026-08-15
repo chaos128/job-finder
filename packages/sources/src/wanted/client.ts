@@ -29,7 +29,13 @@ export async function getJson(
   if (!res.ok) {
     throw new WantedHttpError(res.status, `${res.status} ${res.statusText} — ${url}`)
   }
-  return res.json()
+  try {
+    return await res.json()
+  } catch (cause) {
+    // 2xx인데 JSON이 아닌 본문(예: 봇 차단 인터스티셜 HTML)은 영구 실패보다 일시적 차단일 가능성이 높다.
+    // 5xx로 분류해 재시도 가치가 있다고 표시한다.
+    throw new WantedHttpError(502, `JSON 파싱 실패 (HTTP ${res.status}) — ${url}: ${String(cause)}`)
+  }
 }
 
 export function absolute(path: string): string {

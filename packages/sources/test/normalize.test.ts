@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import listFixture from './fixtures/wanted-list.json' with { type: 'json' }
 import detailFixture from './fixtures/wanted-detail.json' with { type: 'json' }
 import { normalizeWantedDetail, parseListPage } from '../src/index.js'
@@ -47,34 +47,24 @@ test('모양이 다른 응답은 던진다', () => {
     .toThrow(/job/)
 })
 
-test('due_time이 YYYY-MM-DD 형식이면 그대로 통과한다', () => {
+function dueTimeOf(due_time: string | null): string | null {
   const { refs } = parseListPage({
-    data: [
-      {
-        id: 1,
-        position: 'p',
-        company: { id: 1, name: 'c' },
-        address: null,
-        due_time: '2026-09-30',
-      },
-    ],
+    data: [{ id: 1, position: 'p', company: { id: 1, name: 'c' }, address: null, due_time }],
     links: { next: null },
   })
-  expect(refs[0]!.job.dueTime).toBe('2026-09-30')
-})
+  return refs[0]!.job.dueTime
+}
 
-test('due_time이 날짜 형식이 아니면 null로 정규화한다', () => {
-  const { refs } = parseListPage({
-    data: [
-      {
-        id: 1,
-        position: 'p',
-        company: { id: 1, name: 'c' },
-        address: null,
-        due_time: '상시채용',
-      },
-    ],
-    links: { next: null },
+describe('due_time 정규화', () => {
+  test.each([
+    ['2026-09-30', '2026-09-30'],
+    ['2026-09-30T23:59:59+09:00', '2026-09-30'],
+    ['상시채용', null],
+    ['2026-13-45', null],
+    ['2026-02-30', null],
+    ['2026-9-3', null],
+    ['', null],
+  ])('%s -> %s', (input, expected) => {
+    expect(dueTimeOf(input)).toBe(expected)
   })
-  expect(refs[0]!.job.dueTime).toBeNull()
 })
