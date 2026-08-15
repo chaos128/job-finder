@@ -48,6 +48,28 @@ test('최소 점수 미만만 있으면 아무것도 고르지 않는다', () =>
   expect(selectForDigest([make(10), make(30)], { topN: 3, minScore: 60 })).toEqual([])
 })
 
+// 후보는 발송될 때까지 계속 남으므로, 거르지 않으면 마감된 공고가 영원히 떠다닌다.
+test('마감이 지난 공고는 점수가 높아도 제외한다', () => {
+  const make = (total: number, dueTime: string | null) =>
+    ({ job: { id: `j${total}`, dueTime }, score: { total } } as ScoredJob)
+  const picked = selectForDigest(
+    [make(90, '2026-08-14'), make(80, null), make(70, '2026-08-31')],
+    { topN: 3, minScore: 60 },
+    new Date('2026-08-15T00:00:00Z'),
+  )
+  // 90점은 어제 마감. 상시채용(null)과 미래 마감은 남는다.
+  expect(picked.map((p) => p.score.total)).toEqual([80, 70])
+})
+
+// KST 09:00 발송 시각은 UTC로 아직 같은 날 00:00이다. UTC 날짜로 비교하면
+// 오늘 마감인 공고를 하루 일찍 버린다.
+test('오늘 마감인 공고는 KST 기준으로 남긴다', () => {
+  const make = (dueTime: string) => ({ job: { id: 'j', dueTime }, score: { total: 90 } } as ScoredJob)
+  const atKst9am = new Date('2026-08-15T00:00:00Z')
+  expect(selectForDigest([make('2026-08-15')], { topN: 3, minScore: 60 }, atKst9am)).toHaveLength(1)
+  expect(selectForDigest([make('2026-08-14')], { topN: 3, minScore: 60 }, atKst9am)).toHaveLength(0)
+})
+
 test('minScore를 통과해도 topN을 넘는 항목은 잘린다', () => {
   const make = (total: number) => ({ job: { id: `j${total}` }, score: { total } } as ScoredJob)
   // 넷 다 minScore(60)는 넘긴다 — slice(0, topN)이 실제로 잘라내는지를 확인한다.
