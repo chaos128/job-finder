@@ -78,6 +78,9 @@ importers:
       '@job-finder/db':
         specifier: workspace:*
         version: link:../db
+      '@job-finder/scoring':
+        specifier: workspace:*
+        version: link:../scoring
 
   packages/scoring:
     dependencies:

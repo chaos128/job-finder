@@ -44,6 +44,20 @@ test('근거와 축별 점수를 함께 보여준다', () => {
   expect(text).toContain('stack')
 })
 
+test('축은 jsonb 키 순서가 아니라 루브릭 순서로 보여준다', () => {
+  const item = scored('Frontend Lead', 'ACME', 72)
+  // Postgres jsonb가 정규화해 돌려주는 순서(길이 → 바이트)를 그대로 재현한다.
+  item.score.breakdown = { role: 16, stack: 18, domain: 14, growth: 12, conditions: 12 }
+  const { text } = renderDigest([item])
+  expect(text).toContain('stack 18 · role 16 · domain 14 · growth 12 · conditions 12')
+})
+
+test('루브릭에 없는 축이 섞여 있어도 빠뜨리지 않고 뒤에 붙인다', () => {
+  const item = scored('Frontend Lead', 'ACME', 72)
+  item.score.breakdown = { vibes: 5, stack: 18 }
+  expect(renderDigest([item]).text).toContain('stack 18 · vibes 5')
+})
+
 test('점수 내림차순으로 정렬한다', () => {
   const { text } = renderDigest([scored('Low', 'B', 61), scored('High', 'A', 88)])
   expect(text.indexOf('High')).toBeLessThan(text.indexOf('Low'))

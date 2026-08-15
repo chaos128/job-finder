@@ -1,4 +1,5 @@
 import type { ScoredJob } from '@job-finder/db'
+import { RUBRIC_AXES } from '@job-finder/scoring'
 
 function escapeHtml(value: string): string {
   return value
@@ -9,7 +10,12 @@ function escapeHtml(value: string): string {
 }
 
 function breakdownLine(breakdown: Record<string, number>): string {
-  return Object.entries(breakdown).map(([axis, v]) => `${axis} ${v}`).join(' · ')
+  // jsonb에서 돌아온 키 순서는 Postgres가 정규화한 것이라 루브릭 순서와 다르다.
+  // 매일 오는 메일이 같은 자리에서 같은 축을 보여주도록 루브릭 순서로 고정한다.
+  // 루브릭에 없는 키(과거 버전 등)는 뒤에 덧붙인다 — 조용히 빠뜨리지 않는다.
+  const known = RUBRIC_AXES.filter((axis) => axis in breakdown) as string[]
+  const rest = Object.keys(breakdown).filter((key) => !known.includes(key))
+  return [...known, ...rest].map((axis) => `${axis} ${breakdown[axis]}`).join(' · ')
 }
 
 export function renderDigest(items: ScoredJob[]): {

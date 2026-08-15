@@ -6,5 +6,5 @@
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@job-finder/db": "workspace:*" }
+  "dependencies": { "@job-finder/db": "workspace:*", "@job-finder/scoring": "workspace:*" }
 }
