@@ -63,9 +63,18 @@ importers:
       '@job-finder/db':
         specifier: workspace:*
         version: link:../db
+      '@job-finder/mailer':
+        specifier: workspace:*
+        version: link:../mailer
       '@job-finder/sources':
         specifier: workspace:*
         version: link:../sources
+
+  packages/mailer:
+    dependencies:
+      '@job-finder/db':
+        specifier: workspace:*
+        version: link:../db
 
   packages/scoring:
     dependencies:

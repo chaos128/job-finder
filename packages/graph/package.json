@@ -4,10 +4,15 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@job-finder/db": "workspace:*",
+    "@job-finder/mailer": "workspace:*",
     "@job-finder/sources": "workspace:*"
   }
 }
