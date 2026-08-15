@@ -23,8 +23,10 @@ export interface RunnerOptions {
 const DEFAULT_CONCURRENCY = 3
 
 /**
- * 노드를 항목마다 실행한다. 건별 실패는 격리되어 run 전체를 죽이지 않으며,
- * 모든 결과는 node_runs에 남는다.
+ * 노드를 항목마다 실행한다. 건별 실패는 격리되어 run 전체를 죽이지 않는다.
+ * node_runs 기록 자체가 실패해도(네트워크 문제 등) 그 에러는 삼키고 run은
+ * 계속된다 — node_runs는 관측용이라, 기록 한 줄을 잃는 편이 진행 중인 run을
+ * 죽이고 나머지 워커들을 좀비로 남기는 것보다 낫다.
  */
 export async function runNode<In, Out>(
   node: Node<In, Out>,
@@ -32,7 +34,9 @@ export async function runNode<In, Out>(
   itemId: (input: In) => string,
   opts: RunnerOptions,
 ): Promise<RunSummary<Out>> {
-  const limit = Math.max(1, opts.concurrency ?? DEFAULT_CONCURRENCY)
+  const requested = opts.concurrency
+  const concurrency = requested !== undefined && Number.isFinite(requested) ? requested : DEFAULT_CONCURRENCY
+  const limit = Math.max(1, concurrency)
   const summary: RunSummary<Out> = { ok: [], failed: [] }
   let cursor = 0
 
@@ -68,14 +72,18 @@ export async function runNode<In, Out>(
         })
       }
 
-      await opts.store.recordNodeRun({
-        runId: opts.runId,
-        node: node.name,
-        itemId: id,
-        status: result.ok ? 'ok' : 'failed',
-        durationMs,
-        error: result.ok ? null : `${result.error.code}: ${result.error.message}`,
-      })
+      try {
+        await opts.store.recordNodeRun({
+          runId: opts.runId,
+          node: node.name,
+          itemId: id,
+          status: result.ok ? 'ok' : 'failed',
+          durationMs,
+          error: result.ok ? null : `${result.error.code}: ${result.error.message}`,
+        })
+      } catch {
+        // node_runs 기록 실패는 관측 손실일 뿐이다. run을 죽이지 않는다.
+      }
     }
   }
 
