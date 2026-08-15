@@ -27,6 +27,15 @@ importers:
         specifier: ^2.112.3
         version: 2.112.3
 
+  packages/graph:
+    dependencies:
+      '@job-finder/db':
+        specifier: workspace:*
+        version: link:../db
+      '@job-finder/sources':
+        specifier: workspace:*
+        version: link:../sources
+
   packages/sources:
     dependencies:
       '@job-finder/db':
