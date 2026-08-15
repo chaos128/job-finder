@@ -5,6 +5,8 @@ import type {
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
+/** SupabaseStore의 listNotifyCandidates와 같은 상한 — 두 구현이 같은 계약을 지켜야 한다. */
+const NOTIFY_CANDIDATE_LIMIT = 200
 
 export class MemoryStore implements Store {
   private seq = 0
@@ -138,6 +140,8 @@ export class MemoryStore implements Store {
       if (job && !job.hidden) out.push({ job, score })
     }
     return out
+      .sort((a, b) => b.score.total - a.score.total)
+      .slice(0, NOTIFY_CANDIDATE_LIMIT)
   }
 
   async createNotification(jobIds: string[]) {

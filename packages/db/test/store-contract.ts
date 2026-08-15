@@ -75,6 +75,23 @@ export function describeStoreContract(
       expect(candidates.map((c) => c.score.total)).toEqual([80])
     })
 
+    // 후보 목록에 상한을 두어도 다이제스트 결과가 같으려면 정렬이 보장돼야 한다.
+    test('알림 후보는 점수 내림차순으로 돌아온다', async () => {
+      const inserted = await store.insertJobs([job('1'), job('2'), job('3')])
+      for (const [i, total] of [70, 90, 80].entries()) {
+        await store.saveJobDetail(inserted[i]!.id, {
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.saveScore({
+          jobId: inserted[i]!.id, total, breakdown: {},
+          reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+        })
+      }
+      const candidates = await store.listNotifyCandidates()
+      expect(candidates.map((c) => c.score.total)).toEqual([90, 80, 70])
+    })
+
     test('발송 표시된 job은 알림 후보에서 빠진다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {

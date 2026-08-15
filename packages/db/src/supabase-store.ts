@@ -8,6 +8,24 @@ import type {
 
 const MAX_ATTEMPTS = 3
 
+/**
+ * 알림 후보는 단조 증가한다 — minScore 미달로 영영 메일에 안 실리는 공고는
+ * notified_at이 계속 NULL이라 매 실행마다 다시 조회된다. total desc 정렬이므로
+ * 상위 200만 받아도 selectForDigest(topN 3)의 결과는 같다.
+ */
+const NOTIFY_CANDIDATE_LIMIT = 200
+
+/**
+ * 다이제스트가 쓰는 것만 가져온다 — JD 본문(intro/requirements/…)과
+ * raw(Wanted 상세 응답 원본)는 메일에 한 글자도 안 쓰이면서 후보 수에 비례해
+ * 페이로드를 키운다. 나머지 스칼라 컬럼은 Job 타입을 채우기 위한 것이고 작다.
+ */
+const NOTIFY_CANDIDATE_SELECT = `*, jobs(
+  id, source, external_id, position, company_name, company_id,
+  address_district, address_full, url, due_time, first_seen_at,
+  detail_status, detail_attempts, detail_error, bookmarked, hidden
+)`
+
 interface JobRow {
   id: string; source: string; external_id: string; position: string
   company_name: string; company_id: number | null
@@ -45,9 +63,14 @@ interface NotificationRow {
 // an earlier version of listJobsNeedingScore that embedded scores from
 // jobs; that method now queries the jobs_needing_score view instead,
 // but listNotifyCandidates still embeds jobs from scores below.)
-type ScoreWithJobRow = ScoreRow & { jobs: JobRow }
+type ScoreWithJobRow = ScoreRow & { jobs: DigestJobRow }
 
-function toJob(row: JobRow): Job {
+type DetailColumns =
+  'intro' | 'requirements' | 'main_tasks' | 'preferred_points' | 'benefits' | 'skill_tags' | 'raw'
+type DigestJobRow = Omit<JobRow, DetailColumns>
+
+/** 다이제스트 경로는 상세 컬럼을 select하지 않으므로 없는 행도 받는다. */
+function toJob(row: DigestJobRow & Partial<Pick<JobRow, DetailColumns>>): Job {
   return {
     id: row.id,
     source: row.source as Source,
@@ -59,13 +82,13 @@ function toJob(row: JobRow): Job {
     addressFull: row.address_full,
     url: row.url,
     dueTime: row.due_time,
-    intro: row.intro,
-    requirements: row.requirements,
-    mainTasks: row.main_tasks,
-    preferredPoints: row.preferred_points,
-    benefits: row.benefits,
-    skillTags: row.skill_tags,
-    raw: row.raw,
+    intro: row.intro ?? null,
+    requirements: row.requirements ?? null,
+    mainTasks: row.main_tasks ?? null,
+    preferredPoints: row.preferred_points ?? null,
+    benefits: row.benefits ?? null,
+    skillTags: row.skill_tags ?? [],
+    raw: row.raw ?? null,
     firstSeenAt: row.first_seen_at,
     detailStatus: row.detail_status as Job['detailStatus'],
     detailAttempts: row.detail_attempts,
@@ -212,9 +235,9 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
 
     async listNotifyCandidates(): Promise<ScoredJob[]> {
       const rows = unwrap<ScoreWithJobRow[]>(
-        await db.from('scores').select('*, jobs(*)')
+        await db.from('scores').select(NOTIFY_CANDIDATE_SELECT)
           .eq('status', 'ok').is('notified_at', null)
-          .order('total', { ascending: false }),
+          .order('total', { ascending: false }).limit(NOTIFY_CANDIDATE_LIMIT),
       )
 
       return rows
