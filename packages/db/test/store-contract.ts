@@ -94,5 +94,43 @@ export function describeStoreContract(name: string, makeStore: () => Promise<Sto
       const pending = await store.listPendingNotifications()
       expect(pending.map((p) => p.id)).toEqual([n.id])
     })
+
+    test('재채점해도 이미 발송된 job의 notifiedAt은 보존된다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: null, mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: [], raw: {},
+      })
+      await store.saveScore({
+        jobId: inserted!.id, total: 80, breakdown: {},
+        reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+      })
+      const n = await store.createNotification([inserted!.id])
+      await store.markNotificationSent(n.id)
+      await store.saveScore({
+        jobId: inserted!.id, total: 90, breakdown: {},
+        reasoning: '재채점', scorer: 'routine', rubricVersion: 'v1',
+      })
+      expect(await store.listNotifyCandidates()).toHaveLength(0)
+    })
+
+    test('채점 실패 후 3회 미만이면 채점 대기로 돌아오고, 3회 실패하면 영구히 빠진다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: null, mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: [], raw: {},
+      })
+      await store.recordScoreFailure(inserted!.id, 'timeout')
+      expect(await store.listJobsNeedingScore(10)).toHaveLength(1)
+      await store.recordScoreFailure(inserted!.id, 'timeout')
+      await store.recordScoreFailure(inserted!.id, 'timeout')
+      expect(await store.listJobsNeedingScore(10)).toHaveLength(0)
+    })
+
+    test('linkSearchHits는 같은 (searchId, jobId) 조합을 여러 번 호출해도 에러 없이 무시한다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.linkSearchHits('search-1', [inserted!.id])
+      await expect(store.linkSearchHits('search-1', [inserted!.id])).resolves.toBeUndefined()
+    })
   })
 }
