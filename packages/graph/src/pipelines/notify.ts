@@ -3,6 +3,12 @@ import type { Mailer } from '@job-finder/mailer'
 import { createNotifyNode, selectForDigest, type NotifyPlan } from '../nodes/notify.js'
 import { runNode, type FailedItem } from '../core/runner.js'
 
+/**
+ * 설정 누락으로 인한 skip — "오늘 후보 없음"과 달리 사람이 고쳐야 하는 상태다.
+ * cron 라우트가 이 값만 골라 5xx로 올리므로 상수로 공유한다.
+ */
+export const NOTIFY_SKIP_MISCONFIGURED = 'notify_email not configured'
+
 export interface NotifyReport {
   runId: string
   sent: number
@@ -28,7 +34,7 @@ export async function runNotify(
     // 수신 주소가 없으면 알림 행조차 만들지 않는다 — 빈 주소는 Resend에서
     // 영구 4xx라, 행을 만들면 상한(3)까지 헛발송한 뒤에야 게이트가 풀린다.
     if (profile.notifyEmail.trim() === '') {
-      return { runId, sent: 0, jobIds: [], skipped: 'notify_email not configured', failed: [] }
+      return { runId, sent: 0, jobIds: [], skipped: NOTIFY_SKIP_MISCONFIGURED, failed: [] }
     }
     const candidates = await store.listNotifyCandidates()
     const byId = new Map(candidates.map((c) => [c.job.id, c]))

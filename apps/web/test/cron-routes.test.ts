@@ -1,4 +1,5 @@
 import type { Store } from '@job-finder/db'
+import { NOTIFY_SKIP_MISCONFIGURED } from '@job-finder/graph'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 const mocked = vi.hoisted(() => ({
@@ -6,7 +7,10 @@ const mocked = vi.hoisted(() => ({
   notify: {} as Record<string, unknown>,
 }))
 
-vi.mock('@job-finder/graph', () => ({
+// NOTIFY_SKIP_MISCONFIGURED는 실제 값을 그대로 가져온다 — 여기에 리터럴을 박으면
+// 상수가 바뀌었을 때 라우트는 깨지는데 테스트는 계속 통과한다.
+vi.mock('@job-finder/graph', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@job-finder/graph')>()),
   runCollect: async () => mocked.collect,
   runNotify: async () => mocked.notify,
 }))
@@ -49,4 +53,19 @@ test('notify: 발송 실패가 있으면 5xx로 알리되 리포트 본문은 �
   const res = await notifyGET(request())
   expect(res.status).toBe(500)
   expect((await res.json()).failed).toHaveLength(1)
+})
+
+// 설정 누락은 아무것도 "실패"하지 않아 failed가 비지만, 고쳐주기 전까지 매일
+// 아무 일도 안 한다 — 200으로 두면 정상 idle과 구분되지 않는다.
+test('notify: notify_email 미설정 skip은 failed가 비어도 5xx', async () => {
+  mocked.notify = { ...mocked.notify, sent: 0, jobIds: [], skipped: NOTIFY_SKIP_MISCONFIGURED }
+  const res = await notifyGET(request())
+  expect(res.status).toBe(500)
+  expect((await res.json()).skipped).toBe(NOTIFY_SKIP_MISCONFIGURED)
+})
+
+// 반대로 후보가 없어서 쉬는 것은 정상이다 — 여기서 5xx가 나면 매일 거짓 경보가 된다.
+test('notify: 후보 없음 skip은 200', async () => {
+  mocked.notify = { ...mocked.notify, sent: 0, jobIds: [], skipped: 'no candidates above threshold' }
+  expect((await notifyGET(request())).status).toBe(200)
 })
