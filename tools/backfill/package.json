@@ -1,0 +1,18 @@
+{
+  "name": "@job-finder/backfill",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file=../../.env.local src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@job-finder/db": "workspace:*",
+    "@job-finder/graph": "workspace:*",
+    "@job-finder/sources": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}
