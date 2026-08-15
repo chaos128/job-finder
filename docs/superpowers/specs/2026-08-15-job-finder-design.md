@@ -396,8 +396,11 @@ SUPABASE_SERVICE_ROLE_KEY     # cron / worker
 RESEND_API_KEY
 CRON_SECRET                   # Vercel cron 엔드포인트 인증
 SCORING_TOKEN                 # routine ↔ 채점 엔드포인트
-ANTHROPIC_API_KEY             # 프로필 1회 파싱 및 API 채점 전환 시에만
+ANTHROPIC_API_KEY             # 지금은 불필요. API 채점으로 전환할 때만 추가한다.
 ```
+
+이력서 파싱은 Claude Code에서 대화형으로 1회 수행하므로 API 키가 들어가지 않는다.
+**운영 채점은 구독(routine), 1회성 작업은 대화형 세션** — 종량 과금이 쓰이는 곳이 없다.
 
 ## 11. 테스트 전략
 
@@ -432,8 +435,8 @@ ANTHROPIC_API_KEY             # 프로필 1회 파싱 및 API 채점 전환 시�
 
 1. **routine에 `SCORING_TOKEN`을 주입하는 방법** — cloud routine의 시크릿 전달 방식을 구현 시점에 확인한다.
    설계상 외부 종속성은 토큰 하나뿐이라 방식이 무엇이든 흡수된다.
-2. **`resume.pdf` 파싱** — 현재 환경에 `pdftotext`가 없다. 파싱은 Claude에 PDF를 직접 넣어
-   1회 수행하고 결과를 `profile.resume_text`에 저장한다.
+2. **`resume.pdf` 파싱** — `brew install poppler` 후 Claude Code에서 PDF를 직접 읽어
+   프로필을 만들고 `profile.resume_text`에 넣는다. 스크립트도 API 키도 필요 없다. *(해결됨)*
 3. **루브릭 v1 확정** — §7.3은 초안이다. 프로필 파싱 후 eval 10건으로 검증하고 조정한다.
 4. **Vercel 요금제** — Hobby 기준(cron 1일 1회, 함수 60초)으로 설계했다.
    collect / notify를 하루 2회 실행하므로 요금제 제약을 확인해야 한다.

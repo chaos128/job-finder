@@ -959,7 +959,7 @@ SUPABASE_SERVICE_ROLE_KEY     # cron / worker
 RESEND_API_KEY
 CRON_SECRET                   # Vercel cron 엔드포인트 인증
 SCORING_TOKEN                 # routine ↔ 채점 엔드포인트
-ANTHROPIC_API_KEY             # 프로필 1회 파싱, API 채점 전환 시에만</code></pre>
+ANTHROPIC_API_KEY             # 지금은 불필요. API 채점 전환 시에만 추가</code></pre>
       </section>
 
       <!-- 11 -->
@@ -1015,7 +1015,7 @@ ANTHROPIC_API_KEY             # 프로필 1회 파싱, API 채점 전환 시에�
         <div class="sec-head"><span class="sec-num">§13</span><h2>열린 항목</h2></div>
         <ol>
           <li><strong>routine에 <code>SCORING_TOKEN</code>을 주입하는 방법</strong> — cloud routine의 시크릿 전달 방식을 구현 시점에 확인한다. 설계상 외부 종속성은 토큰 하나뿐이라 방식이 무엇이든 흡수된다.</li>
-          <li><strong><code>resume.pdf</code> 파싱</strong> — 현재 환경에 <code>pdftotext</code>가 없다. Claude에 PDF를 직접 넣어 1회 파싱하고 결과를 <code>profile.resume_text</code>에 저장한다.</li>
+          <li><strong><code>resume.pdf</code> 파싱</strong> — <em>해결됨.</em> <code>brew install poppler</code> 후 Claude Code에서 PDF를 직접 읽어 프로필을 만들고 <code>profile.resume_text</code>에 넣는다. 스크립트도 API 키도 필요 없다.</li>
           <li><strong>루브릭 v1 확정</strong> — §7은 초안이다. 프로필 파싱 후 eval 10건으로 검증하고 조정한다.</li>
           <li><strong>Vercel 요금제</strong> — Hobby 기준(cron 1일 1회, 함수 60초)으로 설계했다. collect / notify를 하루 2회 실행하므로 제약을 확인해야 한다. 걸리면 둘을 한 cron으로 합친다 — 질의 기반이라 순서 의존성이 없어 안전하다.</li>
         </ol>
