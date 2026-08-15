@@ -3,6 +3,7 @@ import { getStore } from '@/lib/store'
 import { requireBearer } from '@/lib/guard'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function POST(req: Request) {
   const denied = requireBearer(req, process.env.SCORING_TOKEN)

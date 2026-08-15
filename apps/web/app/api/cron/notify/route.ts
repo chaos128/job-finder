@@ -11,5 +11,6 @@ export async function GET(req: Request) {
   if (denied) return denied
 
   const report = await runNotify({ store: getStore(), mailer: getMailer() }, 'cron')
-  return Response.json(report)
+  // collect 쪽과 같은 이유로 5xx — 발송 실패는 sent:0으로 idle과 구분되지 않는다.
+  return Response.json(report, { status: report.failed.length > 0 ? 500 : 200 })
 }

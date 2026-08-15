@@ -3,6 +3,7 @@ import { getStore } from '@/lib/store'
 import { requireBearer } from '@/lib/guard'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 /** routine 한 번이 감당할 만한 상한. 남으면 다음 실행이 가져간다. */
 const BATCH = 20
