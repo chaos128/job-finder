@@ -60,6 +60,19 @@ export function describeStoreContract(
       expect(await store.listJobsNeedingDetail(10)).toHaveLength(0)
     })
 
+    // 겹쳐 도는 실행(cron + 수동 /api/run)이 같은 job 집합을 받아, 한쪽이 상세를
+    // 저장한 뒤 다른 쪽이 실패를 기록하는 순서가 실제로 가능하다.
+    test('상세가 저장된 뒤 도착한 실패는 job을 다시 대기 상태로 되돌리지 못한다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: 'React', mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
+      })
+      await store.recordDetailFailure(inserted!.id, '뒤늦게 도착한 5xx')
+      expect(await store.listJobsNeedingDetail(10)).toHaveLength(0)
+      expect(await store.listJobsNeedingScore(10)).toHaveLength(1)
+    })
+
     test('채점된 job은 채점 대기에서 빠지고 알림 후보가 된다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {

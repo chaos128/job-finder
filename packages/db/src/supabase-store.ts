@@ -183,7 +183,11 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         detail_attempts: attempts,
         detail_error: message,
         detail_status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
-      }).eq('id', jobId)
+      })
+        // 이미 'ok'인 job은 건드리지 않는다 — cron과 /api/run이 겹쳐 돌면 한쪽이
+        // 상세를 저장한 뒤 다른 쪽의 뒤늦은 실패가 'ok'를 'pending'으로 되돌려
+        // 그 공고가 jobs_needing_score에서 빠진다.
+        .eq('id', jobId).eq('detail_status', 'pending')
       if (error) throw new Error(error.message)
     },
 

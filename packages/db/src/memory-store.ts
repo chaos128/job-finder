@@ -81,6 +81,8 @@ export class MemoryStore implements Store {
   async recordDetailFailure(jobId: string, message: string) {
     const job = this.jobs.get(jobId)
     if (!job) throw new Error(`unknown job ${jobId}`)
+    // SupabaseStore와 같은 가드 — 이미 상세를 받은 job을 되돌리지 않는다.
+    if (job.detailStatus !== 'pending') return
     const attempts = job.detailAttempts + 1
     this.jobs.set(jobId, {
       ...job,
