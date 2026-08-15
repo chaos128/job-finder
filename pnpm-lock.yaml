@@ -29,6 +29,9 @@ importers:
       '@job-finder/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@job-finder/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
       '@job-finder/sources':
         specifier: workspace:*
         version: link:../../packages/sources
@@ -63,6 +66,15 @@ importers:
       '@job-finder/sources':
         specifier: workspace:*
         version: link:../sources
+
+  packages/scoring:
+    dependencies:
+      '@job-finder/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
 
   packages/sources:
     dependencies:

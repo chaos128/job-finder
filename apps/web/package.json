@@ -12,6 +12,7 @@
   "dependencies": {
     "@job-finder/db": "workspace:*",
     "@job-finder/graph": "workspace:*",
+    "@job-finder/scoring": "workspace:*",
     "@job-finder/sources": "workspace:*",
     "next": "^15.1.0",
     "react": "^19.0.0",
