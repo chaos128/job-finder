@@ -261,8 +261,17 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     },
 
     async markNotificationFailed(notificationId: string, message: string) {
-      const { error } = await db.from('notifications')
-        .update({ status: 'pending', error: message }).eq('id', notificationId)
+      const row = unwrap<{ attempts: number }>(
+        await db.from('notifications').select('attempts').eq('id', notificationId).single(),
+      )
+      const attempts = row.attempts + 1
+      const { error } = await db.from('notifications').update({
+        attempts,
+        error: message,
+        // 상한에 닿으면 pending으로 되돌리지 않는다 — 영구 실패 한 건이 계속
+        // pending으로 남으면 retry-first 게이트가 새 다이제스트를 영원히 막는다.
+        status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
+      }).eq('id', notificationId)
       if (error) throw new Error(error.message)
     },
 

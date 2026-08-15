@@ -14,8 +14,9 @@ function fakeMailer(onSend?: () => never) {
   return { mailer, sent }
 }
 
-async function seedScored(store: MemoryStore, totals: number[]) {
-  for (const [i, total] of totals.entries()) {
+async function seedScored(store: MemoryStore, totals: number[], offset = 0) {
+  for (const [n, total] of totals.entries()) {
+    const i = offset + n
     const [job] = await store.insertJobs([{
       source: 'wanted', externalId: String(i), position: `Pos ${i}`,
       companyName: 'ACME', companyId: 1, addressDistrict: null, addressFull: null,
@@ -96,6 +97,44 @@ test('발송 실패 시 pending으로 남아 다음 실행이 재시도한다', 
   expect(working.sent).toHaveLength(1)
   expect(retry.sent).toBe(1)
   expect(await store.listPendingNotifications()).toHaveLength(0)
+})
+
+// poison pill: 영구 실패하는 알림 한 건이 retry-first 게이트를 막으면 이 서비스의
+// 유일한 산출물이 영원히 멈춘다. attempts 상한이 그 고리를 끊는지 확인한다.
+test('발송이 상한까지 실패하면 알림을 failed로 확정하고 다음 실행이 새 다이제스트를 만든다', async () => {
+  const store = new MemoryStore()
+  await seedScored(store, [88])
+  const failing = fakeMailer(() => { throw new Error('Resend 422: invalid to') })
+
+  for (let day = 0; day < 3; day++) {
+    await runNotify({ store, mailer: failing.mailer }, 'cron')
+  }
+  expect(store.notifications.size).toBe(1) // 상한 전에는 같은 행만 재시도한다
+  expect([...store.notifications.values()][0]!.status).toBe('failed')
+  expect(await store.listPendingNotifications()).toHaveLength(0)
+
+  // 그 사이 쌓인 신규 공고가 다음 실행에서 실제로 메일에 실려야 한다.
+  await seedScored(store, [95], 1)
+  const working = fakeMailer()
+  const report = await runNotify({ store, mailer: working.mailer }, 'cron')
+
+  expect(working.sent).toHaveLength(1)
+  expect(working.sent[0]!.subject).toContain('최고 95점')
+  expect(report.sent).toBe(2) // 못 보냈던 88점도 후보로 남아 있어 함께 나간다
+  expect(store.notifications.size).toBe(2)
+})
+
+test('notify_email이 비어 있으면 알림 행을 만들지 않고 skip한다', async () => {
+  const store = new MemoryStore()
+  store.profile = { ...store.profile, notifyEmail: '' }
+  await seedScored(store, [88])
+  const { mailer, sent } = fakeMailer()
+
+  const report = await runNotify({ store, mailer }, 'cron')
+
+  expect(sent).toHaveLength(0)
+  expect(report.skipped).toBe('notify_email not configured')
+  expect(store.notifications.size).toBe(0) // 행을 만들면 그 자체가 poison pill이 된다
 })
 
 test('두 번 연속 실행해도 같은 공고를 두 번 보내지 않는다 (멱등)', async () => {

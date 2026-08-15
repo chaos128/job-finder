@@ -9,11 +9,9 @@ export interface NotifyReport {
   jobIds: string[]
   skipped: string | null
   /**
-   * notifications에 attempts 카운터가 없어서, 영구히 실패하는 알림이 있으면
-   * retry-first 게이트 때문에 이후 모든 실행이 그 알림만 계속 재시도하며
-   * 새 다이제스트를 만들지 않는다 — sent: 0, skipped: null로 idle과 구분이
-   * 안 된다. 이 필드는 그 상황을 드러내기 위한 것이다 (근본 수정은 attempts
-   * 컬럼 추가 — DB 마이그레이션 필요, 이번 범위 밖).
+   * 발송 실패는 sent: 0, skipped: null이라 idle과 구분이 안 된다 — 이 필드가
+   * 유일한 흔적이고, cron 라우트는 이게 비어 있지 않으면 5xx로 응답한다.
+   * (영구 실패는 notifications.attempts 상한이 status='failed'로 확정한다.)
    */
   failed: FailedItem[]
 }
@@ -27,6 +25,11 @@ export async function runNotify(
 
   try {
     const profile = await store.getProfile()
+    // 수신 주소가 없으면 알림 행조차 만들지 않는다 — 빈 주소는 Resend에서
+    // 영구 4xx라, 행을 만들면 상한(3)까지 헛발송한 뒤에야 게이트가 풀린다.
+    if (profile.notifyEmail.trim() === '') {
+      return { runId, sent: 0, jobIds: [], skipped: 'notify_email not configured', failed: [] }
+    }
     const candidates = await store.listNotifyCandidates()
     const byId = new Map(candidates.map((c) => [c.job.id, c]))
 

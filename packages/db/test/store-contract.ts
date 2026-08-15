@@ -99,6 +99,16 @@ export function describeStoreContract(
       expect(pending.map((p) => p.id)).toEqual([n.id])
     })
 
+    test('알림 발송이 3회 실패하면 재시도 대상에서 영구히 빠진다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      const n = await store.createNotification([inserted!.id])
+      for (let i = 0; i < 3; i++) {
+        await store.markNotificationFailed(n.id, 'Resend 422')
+      }
+      // 상한에 닿은 알림이 pending으로 남으면 새 다이제스트가 영원히 막힌다.
+      expect(await store.listPendingNotifications()).toHaveLength(0)
+    })
+
     test('재채점해도 이미 발송된 job의 notifiedAt은 보존된다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
