@@ -41,8 +41,10 @@ interface NotificationRow {
 
 // scores.job_id is both primary key and FK -> jobs, so this is a 1:1
 // relationship. PostgREST embeds 1:1 relations as a single nullable
-// object even from the "one" side, not as an array.
-type JobWithScoreRow = JobRow & { scores: { status: string; attempts: number } | null }
+// object even from the "one" side, not as an array. (This mattered for
+// an earlier version of listJobsNeedingScore that embedded scores from
+// jobs; that method now queries the jobs_needing_score view instead,
+// but listNotifyCandidates still embeds jobs from scores below.)
 type ScoreWithJobRow = ScoreRow & { jobs: JobRow }
 
 function toJob(row: JobRow): Job {
@@ -81,6 +83,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 
 export interface SupabaseStore extends Store {
   __truncateAllForTests(): Promise<void>
+  __seedSearchForTests(): Promise<string>
 }
 
 export function createSupabaseStore(url: string, serviceKey: string): SupabaseStore {
@@ -162,20 +165,14 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     },
 
     async listJobsNeedingScore(limit: number) {
-      const rows = unwrap<JobWithScoreRow[]>(
-        await db.from('jobs')
-          .select('*, scores(status, attempts)')
-          .eq('detail_status', 'ok').limit(limit * 4),
+      // jobs_needing_score (see migration) already applies the
+      // detail_status/score-retry predicate in SQL, so limit() here is
+      // a real limit instead of an over-fetch-then-filter guess.
+      const rows = unwrap<JobRow[]>(
+        await db.from('jobs_needing_score').select('*')
+          .order('first_seen_at', { ascending: true }).limit(limit),
       )
-
-      return rows
-        .filter((r) => {
-          const score = r.scores
-          if (!score) return true
-          return score.status === 'failed' && score.attempts < MAX_ATTEMPTS
-        })
-        .slice(0, limit)
-        .map(toJob)
+      return rows.map(toJob)
     },
 
     async saveScore(input: ScoreInput) {
@@ -291,10 +288,30 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     },
 
     async __truncateAllForTests() {
-      for (const table of ['node_runs', 'runs', 'notifications', 'scores', 'search_hits', 'jobs', 'searches']) {
-        const { error } = await db.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      // children before parents (FKs); each table paired with a key
+      // column that actually exists on it — scores' PK is job_id and
+      // search_hits has no single-column PK at all.
+      const tables = [
+        ['node_runs', 'id'], ['runs', 'id'], ['notifications', 'id'],
+        ['scores', 'job_id'], ['search_hits', 'search_id'], ['jobs', 'id'], ['searches', 'id'],
+      ] as const
+      for (const [table, key] of tables) {
+        const { error } = await db.from(table).delete().neq(key, '00000000-0000-0000-0000-000000000000')
         if (error) throw new Error(`${table}: ${error.message}`)
       }
+    },
+
+    async __seedSearchForTests() {
+      const params: SearchParams = {
+        jobGroupId: '0', tagTypeIds: [], locations: [],
+        yearsFrom: 0, yearsTo: 0, country: 'kr', sort: 'recommend',
+      }
+      const row = unwrap<{ id: string }>(
+        await db.from('searches')
+          .insert({ url: 'https://www.wanted.co.kr/search?query=test', params })
+          .select('id').single(),
+      )
+      return row.id
     },
   }
 }

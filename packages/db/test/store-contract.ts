@@ -13,7 +13,11 @@ const job = (externalId: string): NewJob => ({
   dueTime: null,
 })
 
-export function describeStoreContract(name: string, makeStore: () => Promise<Store>) {
+export function describeStoreContract(
+  name: string,
+  makeStore: () => Promise<Store>,
+  seedSearchId?: (store: Store) => Promise<string>,
+) {
   describe(`Store contract: ${name}`, () => {
     let store: Store
     beforeEach(async () => { store = await makeStore() })
@@ -129,8 +133,9 @@ export function describeStoreContract(name: string, makeStore: () => Promise<Sto
 
     test('linkSearchHits는 같은 (searchId, jobId) 조합을 여러 번 호출해도 에러 없이 무시한다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
-      await store.linkSearchHits('search-1', [inserted!.id])
-      await expect(store.linkSearchHits('search-1', [inserted!.id])).resolves.toBeUndefined()
+      const searchId = seedSearchId ? await seedSearchId(store) : 'search-1'
+      await store.linkSearchHits(searchId, [inserted!.id])
+      await expect(store.linkSearchHits(searchId, [inserted!.id])).resolves.toBeUndefined()
     })
   })
 }

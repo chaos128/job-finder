@@ -71,6 +71,17 @@ create table scores (
 
 create index scores_notify_idx on scores (total desc) where notified_at is null;
 
+-- security_invoker: views default to running with the *owner's* RLS
+-- bypass (migrations run as a role with BYPASSRLS), which would let
+-- anon read straight through this view even with RLS enabled below.
+-- security_invoker makes it check RLS as the querying role instead.
+create view jobs_needing_score
+  with (security_invoker = true) as
+  select j.* from jobs j
+  left join scores s on s.job_id = j.id
+  where j.detail_status = 'ok'
+    and (s.job_id is null or (s.status = 'failed' and s.attempts < 3));
+
 create table notifications (
   id         uuid primary key default gen_random_uuid(),
   status     text not null default 'pending',
@@ -97,3 +108,17 @@ create table node_runs (
   error       text,
   created_at  timestamptz not null default now()
 );
+
+-- RLS: every table is service-role-only for now (no policies). The
+-- pipeline and the contract suite use the service role key, which
+-- bypasses RLS; the anon key (shipped in the future dashboard's
+-- browser bundle) gets no access to any of this, including
+-- profile.resume_text.
+alter table searches      enable row level security;
+alter table jobs          enable row level security;
+alter table search_hits   enable row level security;
+alter table profile       enable row level security;
+alter table scores        enable row level security;
+alter table notifications enable row level security;
+alter table runs          enable row level security;
+alter table node_runs     enable row level security;
