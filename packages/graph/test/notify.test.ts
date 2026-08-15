@@ -4,11 +4,11 @@ import { expect, test, vi } from 'vitest'
 import { runNotify, selectForDigest } from '../src/index.js'
 
 function fakeMailer(onSend?: () => never) {
-  const sent: Array<{ to: string; subject: string }> = []
+  const sent: Array<{ to: string; subject: string; idempotencyKey: string }> = []
   const mailer: Mailer = {
     async send(msg) {
       if (onSend) onSend()
-      sent.push({ to: msg.to, subject: msg.subject })
+      sent.push({ to: msg.to, subject: msg.subject, idempotencyKey: msg.idempotencyKey })
     },
   }
   return { mailer, sent }
@@ -152,10 +152,11 @@ test('두 번 연속 실행해도 같은 공고를 두 번 보내지 않는다 (
 // 발송(mailer.send)은 성공했는데 그 직후 markNotificationSent 자체가 실패하는
 // 경우 — row-before-send 설계가 막지 못하는 유일한 경로다. 메일은 이미
 // 나갔는데 그 사실을 기록하지 못했으니 알림은 pending으로 남고, 다음 실행이
-// 같은 공고를 다시 보낸다. 이 테스트는 그 현재 동작을 있는 그대로 고정한다 —
-// "바람직한 동작"이 아니라 "지금 실제로 일어나는 일"을 검증해서, 나중에
-// attempts 카운터 등으로 고칠 때 회귀를 잡을 수 있게 한다.
-test('발송 후 markNotificationSent 자체가 실패하면 다음 실행이 같은 공고를 다시 보낸다 (중복 발송)', async () => {
+// 같은 공고를 다시 보낸다. 파이프라인 층위의 이 동작은 그대로다.
+// 달라진 것은 두 번의 send가 같은 Idempotency-Key를 지고 나간다는 점이다 —
+// 실제 Resend는 그 키로 두 번째 요청을 접어 수신함에는 한 통만 남는다
+// (여기 fakeMailer는 그 접기를 흉내 내지 않으므로 호출은 2회로 잡힌다).
+test('발송 후 markNotificationSent가 실패하면 다음 실행이 같은 알림을 같은 키로 재발송한다', async () => {
   const store = new MemoryStore()
   await seedScored(store, [88])
   vi.spyOn(store, 'markNotificationSent').mockRejectedValueOnce(new Error('commit failed'))
@@ -172,8 +173,9 @@ test('발송 후 markNotificationSent 자체가 실패하면 다음 실행이 �
   const second = fakeMailer()
   const retry = await runNotify({ store, mailer: second.mailer }, 'cron')
 
-  // 같은 공고에 두 번째 메일이 나간다 — 중복.
+  // 두 번째 요청이 나가긴 하지만 첫 요청과 키가 같다 — Resend가 접는다.
   expect(second.sent).toHaveLength(1)
+  expect(second.sent[0]!.idempotencyKey).toBe(first.sent[0]!.idempotencyKey)
   expect(retry.sent).toBe(1)
   expect(await store.listPendingNotifications()).toHaveLength(0)
 })

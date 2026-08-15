@@ -25,7 +25,9 @@ export function createNotifyNode(
     async run(plan) {
       try {
         const { subject, html, text } = renderDigest(plan.items)
-        await deps.mailer.send({ to: plan.to, subject, html, text })
+        await deps.mailer.send({
+          to: plan.to, subject, html, text, idempotencyKey: plan.notificationId,
+        })
         await deps.store.markNotificationSent(plan.notificationId)
         return ok(plan.notificationId)
       } catch (cause) {
