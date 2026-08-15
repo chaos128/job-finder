@@ -25,7 +25,23 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 (403 `validation_error`). 다른 주소로 받으려면 resend.com/domains에서 도메인을 검증하고
 `NOTIFY_FROM`을 그 도메인 주소로 지정해야 한다.
 
-### 3. Vercel 환경변수
+### 3. Vercel 프로젝트 설정 — Root Directory
+
+**Settings → General → Root Directory 를 `apps/web` 으로 지정한다.**
+
+저장소 루트에 두면 `No Next.js version detected` 로 빌드가 실패한다. `next`는
+`apps/web/package.json`에만 있고 루트에는 `turbo`·`typescript`·`vitest`뿐이다.
+
+- 바로 아래 **"Include source files outside of the Root Directory"** 토글이 켜져 있어야
+  한다. `packages/*`가 `apps/web` 밖에 있다.
+- Build/Install Command는 기본값을 쓴다. Vercel이 워크스페이스 루트에서 설치해야
+  `workspace:*` 의존성 5개가 풀린다.
+- `vercel.json`은 Root Directory 기준으로 찾으므로 `apps/web/vercel.json`이 맞는 위치다.
+- **Build Command에 `--turbopack`을 붙이지 말 것.** `next.config.ts`의
+  `webpack.resolve.extensionAlias`가 ESM `.js`→`.ts` 해석을 푸는데 Turbopack은 이 콜백을
+  무시한다. 워크스페이스 패키지 import가 전부 깨진다.
+
+### 4. Vercel 환경변수
 
 `CRON_SECRET`, `SCORING_TOKEN`, `SUPABASE_*`, `RESEND_API_KEY`, `NOTIFY_FROM`.
 `lib/guard.ts`는 토큰이 없으면 **500으로 닫는다**(열어두지 않는다). 누락되면 모든 라우트가 죽는다.
@@ -33,7 +49,7 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 크론은 UTC로 돈다. `vercel.json`의 `0 16 * * *`(collect) / `0 0 * * *`(notify)는
 각각 KST 01:00 / 09:00이다.
 
-### 4. 첫 notify 실행은 눈으로 확인
+### 5. 첫 notify 실행은 눈으로 확인
 
 `0002` 적용 후 첫 실행의 응답과 Vercel 로그를 한 번은 직접 본다.
 
