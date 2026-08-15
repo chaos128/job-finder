@@ -1,0 +1,24 @@
+# 의존성 / 빌드 산출물
+node_modules/
+.next/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# 시크릿 — 값이 들어가는 파일은 전부
+.env
+.env.*
+!.env.example
+*.local
+
+# 개인 정보
+# resume.pdf 는 이름·경력·연락처가 담긴 개인 문서라 기본적으로 올리지 않는다.
+# 저장소가 private이고 올리기로 정했다면 이 줄을 지우면 된다.
+resume.pdf
+
+# 도구 메타데이터
+.serena/
+.claude/
+
+# OS
+.DS_Store
