@@ -25,3 +25,6 @@ resume.pdf
 
 # SDD 실행 워크스페이스 (스크래치)
 .superpowers/
+
+# 개인 경력 정보 — 저장소가 private임을 확인한 뒤 커밋 여부를 정할 것
+docs/profile.md
