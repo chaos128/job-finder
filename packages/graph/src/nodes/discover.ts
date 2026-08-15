@@ -27,19 +27,25 @@ export function createDiscoverNode(
         return fail('DISCOVER_FAILED', String(cause), false)
       }
 
-      const externalIds = refs.map((r) => r.externalId)
-      const known = await deps.store.findJobIdsByExternalIds(deps.source.id, externalIds)
+      try {
+        const externalIds = refs.map((r) => r.externalId)
+        const known = await deps.store.findJobIdsByExternalIds(deps.source.id, externalIds)
 
-      const rows: NewJob[] = refs
-        .filter((r) => !known.has(r.externalId))
-        .map((r) => ({ source: deps.source.id, ...r.job }))
+        const rows: NewJob[] = refs
+          .filter((r) => !known.has(r.externalId))
+          .map((r) => ({ source: deps.source.id, ...r.job }))
 
-      const created = await deps.store.insertJobs(rows)
+        const created = await deps.store.insertJobs(rows)
 
-      const jobIds = [...known.values(), ...created.map((j) => j.id)]
-      await deps.store.linkSearchHits(search.id, jobIds)
+        const jobIds = [...known.values(), ...created.map((j) => j.id)]
+        await deps.store.linkSearchHits(search.id, jobIds)
 
-      return ok({ searchId: search.id, found: refs.length, created: created.length })
+        return ok({ searchId: search.id, found: refs.length, created: created.length })
+      } catch (cause) {
+        // DB 계층 실패는 일시적 장애로 본다 — Wanted가 파라미터를 거부한 것과
+        // 혼동되지 않도록 별도 코드로 분류해, 대시보드가 검색을 잘못 비활성화하지 않게 한다.
+        return fail('STORE_FAILED', String(cause), true)
+      }
     },
   }
 }
