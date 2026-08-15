@@ -1,4 +1,4 @@
-export const RUBRIC_VERSION = 'v1'
+export const RUBRIC_VERSION = 'v2'
 
 export const RUBRIC_AXES = ['stack', 'role', 'domain', 'growth', 'conditions'] as const
 export type RubricAxis = (typeof RUBRIC_AXES)[number]
@@ -18,7 +18,7 @@ export const MAX_AXIS_SCORE = 20
  * `packages/scoring/src` 디렉터리가 없는 실제 배포 환경을 흉내 내면
  * `ENOENT: no such file or directory, open '.../packages/scoring/src/rubric.md'`로 500이 난다.
  */
-const RUBRIC_MARKDOWN = `# 채점 루브릭 v1
+const RUBRIC_MARKDOWN = `# 채점 루브릭 v2
 
 공고 1건을 5개 축으로 채점한다. 각 축 0~20점, 합계 0~100점.
 **반드시 한 번에 한 건만 채점한다.** 여러 건을 한꺼번에 보면 앞 공고가 뒤 공고의 기준점이 된다.
@@ -43,11 +43,18 @@ const RUBRIC_MARKDOWN = `# 채점 루브릭 v1
 - **10점** 인접 도메인이라 경험 일부가 이전된다
 - **20점** 직접 경험한 도메인이다
 
-## growth — 성장·기술적 도전
+## growth — 회사의 성장성
 
-- **0점** 단순 유지보수로 보이고 배울 것이 거의 없다
-- **10점** 일부 새로운 영역이 있다
-- **20점** 명확한 기술적 난제와 성장 여지가 있다
+**회사가 얼마나 성장하고 있는가**를 본다. 지원자가 무엇을 배울 수 있는지가 아니다.
+낯선 분야라 배울 게 많다는 것은 이 축의 가점 사유가 **아니다** — 그건 domain에서 이미 감점된다.
+
+- **0점** 성장이 정체됐거나 축소 중으로 보인다
+- **10점** 안정적이지만 뚜렷한 성장 신호가 없다
+- **20점** 매출·사용자·투자·시장 지위에 명확한 성장 신호가 있다
+
+근거로 삼을 것: 매출·MAU·거래액 증가율, 투자 유치 단계, 시장 점유율,
+해외 진출, 채용 규모 확대. 공고에 이런 신호가 전혀 없으면 **10점**으로 둔다
+— 정보가 없는 것을 성장이 없는 것으로 읽지 않는다.
 
 ## conditions — 근무 조건
 

@@ -8,9 +8,12 @@ const valid = {
   reasoning: 'React/TS 주력이 requirements와 겹치고 연차도 맞는다.',
 }
 
-test('루브릭 본문과 버전을 읽는다', () => {
-  expect(RUBRIC_VERSION).toBe('v1')
-  expect(loadRubric()).toContain('# 채점 루브릭 v1')
+// 버전을 리터럴로 박으면 올릴 때마다 이 테스트만 고치고 넘어가게 된다.
+// 진짜 잡아야 할 것은 상수와 본문 제목이 서로 어긋나는 경우다 — 채점자는 본문을
+// 읽고 채점하는데 기록되는 버전은 상수라서, 어긋나면 어느 기준으로 매긴 점수인지 알 수 없다.
+test('루브릭 본문의 버전과 RUBRIC_VERSION 상수가 일치한다', () => {
+  expect(RUBRIC_VERSION).toMatch(/^v\d+$/)
+  expect(loadRubric()).toContain(`# 채점 루브릭 ${RUBRIC_VERSION}`)
   expect(RUBRIC_AXES).toEqual(['stack', 'role', 'domain', 'growth', 'conditions'])
 })
 
