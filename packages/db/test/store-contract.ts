@@ -1,0 +1,98 @@
+import { beforeEach, describe, expect, test } from 'vitest'
+import type { NewJob, Store } from '../src/index.js'
+
+const job = (externalId: string): NewJob => ({
+  source: 'wanted',
+  externalId,
+  position: `Position ${externalId}`,
+  companyName: 'ACME',
+  companyId: 1,
+  addressDistrict: '강남구',
+  addressFull: '서울 강남구',
+  url: `https://www.wanted.co.kr/wd/${externalId}`,
+  dueTime: null,
+})
+
+export function describeStoreContract(name: string, makeStore: () => Promise<Store>) {
+  describe(`Store contract: ${name}`, () => {
+    let store: Store
+    beforeEach(async () => { store = await makeStore() })
+
+    test('insertJobs는 신규만 넣고 중복은 건너뛴다', async () => {
+      const first = await store.insertJobs([job('1'), job('2')])
+      expect(first).toHaveLength(2)
+      const second = await store.insertJobs([job('2'), job('3')])
+      expect(second.map((j) => j.externalId)).toEqual(['3'])
+    })
+
+    test('findJobIdsByExternalIds는 아는 공고만 id와 함께 돌려준다', async () => {
+      const [created] = await store.insertJobs([job('1')])
+      const known = await store.findJobIdsByExternalIds('wanted', ['1', '9'])
+      expect([...known.keys()]).toEqual(['1'])
+      expect(known.get('1')).toBe(created!.id)
+    })
+
+    test('새 job은 detail 대기 목록에 들어간다', async () => {
+      await store.insertJobs([job('1')])
+      const pending = await store.listJobsNeedingDetail(10)
+      expect(pending.map((j) => j.externalId)).toEqual(['1'])
+    })
+
+    test('detail 저장 후에는 대기 목록에서 빠지고 채점 대기로 넘어간다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: 'React', mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
+      })
+      expect(await store.listJobsNeedingDetail(10)).toHaveLength(0)
+      expect(await store.listJobsNeedingScore(10)).toHaveLength(1)
+    })
+
+    test('detail 3회 실패하면 대기 목록에서 영구히 빠진다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      for (let i = 0; i < 3; i++) {
+        await store.recordDetailFailure(inserted!.id, 'boom')
+      }
+      expect(await store.listJobsNeedingDetail(10)).toHaveLength(0)
+    })
+
+    test('채점된 job은 채점 대기에서 빠지고 알림 후보가 된다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: null, mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: [], raw: {},
+      })
+      await store.saveScore({
+        jobId: inserted!.id, total: 80, breakdown: { stack: 20 },
+        reasoning: '적합', scorer: 'routine', rubricVersion: 'v1',
+      })
+      expect(await store.listJobsNeedingScore(10)).toHaveLength(0)
+      const candidates = await store.listNotifyCandidates()
+      expect(candidates.map((c) => c.score.total)).toEqual([80])
+    })
+
+    test('발송 표시된 job은 알림 후보에서 빠진다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      await store.saveJobDetail(inserted!.id, {
+        intro: null, requirements: null, mainTasks: null,
+        preferredPoints: null, benefits: null, skillTags: [], raw: {},
+      })
+      await store.saveScore({
+        jobId: inserted!.id, total: 80, breakdown: {},
+        reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+      })
+      const n = await store.createNotification([inserted!.id])
+      await store.markNotificationSent(n.id)
+      expect(await store.listNotifyCandidates()).toHaveLength(0)
+      expect(await store.listPendingNotifications()).toHaveLength(0)
+    })
+
+    test('발송 실패한 알림은 pending으로 남아 재시도 대상이 된다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      const n = await store.createNotification([inserted!.id])
+      await store.markNotificationFailed(n.id, 'smtp down')
+      const pending = await store.listPendingNotifications()
+      expect(pending.map((p) => p.id)).toEqual([n.id])
+    })
+  })
+}
