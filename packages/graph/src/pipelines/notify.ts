@@ -1,13 +1,21 @@
 import type { RunTrigger, ScoredJob, Store } from '@job-finder/db'
 import type { Mailer } from '@job-finder/mailer'
 import { createNotifyNode, selectForDigest, type NotifyPlan } from '../nodes/notify.js'
-import { runNode } from '../core/runner.js'
+import { runNode, type FailedItem } from '../core/runner.js'
 
 export interface NotifyReport {
   runId: string
   sent: number
   jobIds: string[]
   skipped: string | null
+  /**
+   * notifications에 attempts 카운터가 없어서, 영구히 실패하는 알림이 있으면
+   * retry-first 게이트 때문에 이후 모든 실행이 그 알림만 계속 재시도하며
+   * 새 다이제스트를 만들지 않는다 — sent: 0, skipped: null로 idle과 구분이
+   * 안 된다. 이 필드는 그 상황을 드러내기 위한 것이다 (근본 수정은 attempts
+   * 컬럼 추가 — DB 마이그레이션 필요, 이번 범위 밖).
+   */
+  failed: FailedItem[]
 }
 
 export async function runNotify(
@@ -40,7 +48,7 @@ export async function runNotify(
     if (plans.length === 0) {
       const picked = selectForDigest(candidates, profile.notifyRule)
       if (picked.length === 0) {
-        return { runId, sent: 0, jobIds: [], skipped: 'no candidates above threshold' }
+        return { runId, sent: 0, jobIds: [], skipped: 'no candidates above threshold', failed: [] }
       }
       const notification = await store.createNotification(picked.map((p) => p.job.id))
       plans.push({ notificationId: notification.id, to: profile.notifyEmail, items: picked })
@@ -56,8 +64,13 @@ export async function runNotify(
     const sentPlans = plans.filter((p) => summary.ok.includes(p.notificationId))
     const jobIds = sentPlans.flatMap((p) => p.items.map((i) => i.job.id))
 
-    return { runId, sent: jobIds.length, jobIds, skipped: null }
+    return { runId, sent: jobIds.length, jobIds, skipped: null, failed: summary.failed }
   } finally {
-    await store.endRun(runId)
+    try {
+      await store.endRun(runId)
+    } catch {
+      // endRun은 관측용 마무리 기록이다 — 이게 실패했다고 이미 만든 report를
+      // 날리거나(성공 케이스), 본문에서 던진 진짜 에러를 가려서는(실패 케이스) 안 된다.
+    }
   }
 }
