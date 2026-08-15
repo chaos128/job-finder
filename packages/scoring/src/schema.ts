@@ -28,6 +28,7 @@ export const pendingJobSchema = z.object({
   position: z.string(),
   companyName: z.string(),
   url: z.string(),
+  intro: z.string().nullable(),
   requirements: z.string().nullable(),
   mainTasks: z.string().nullable(),
   preferredPoints: z.string().nullable(),

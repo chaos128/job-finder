@@ -54,6 +54,16 @@ test('축 점수가 정수가 아니면 거부한다', () => {
   }])).toThrow()
 })
 
+test('축 점수가 정수가 아니면 거부한다 — total과 합계가 우연히 맞아떨어져도 (axisScore 자체의 int 규칙 검증)', () => {
+  // stack 18→18.5, role 16→15.5로 서로 상쇄시켜 breakdown 합계(72)와 total(72)이 그대로
+  // 정수로 일치한다. total.int()나 sum refine으로는 안 걸리고, 오직 axisScore.int()만
+  // 이 입력을 거부할 수 있다 — 위 테스트는 total 자체가 71.5라 total.int()에서 이미 걸린다.
+  expect(() => scoreSubmissionSchema.parse([{
+    ...valid,
+    breakdown: { ...valid.breakdown, stack: 18.5, role: 15.5 },
+  }])).toThrow()
+})
+
 test('reasoning이 비면 거부한다', () => {
   expect(() => scoreSubmissionSchema.parse([{ ...valid, reasoning: '' }])).toThrow()
 })

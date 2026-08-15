@@ -10,6 +10,7 @@ export function toPendingJob(job: Job): PendingPayload['jobs'][number] {
     position: job.position,
     companyName: job.companyName,
     url: job.url,
+    intro: job.intro ?? null,
     requirements: job.requirements ?? null,
     mainTasks: job.mainTasks ?? null,
     preferredPoints: job.preferredPoints ?? null,
