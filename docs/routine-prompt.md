@@ -4,8 +4,11 @@ Claude Code scheduled agent(routine)로 매일 **02:00 KST**에 실행한다.
 
 ## 필요한 값
 
-- `JOB_FINDER_BASE_URL` — 배포된 웹 앱 주소 (예: `https://job-finder.vercel.app`)
-- `SCORING_TOKEN` — `.env.local`의 값과 동일
+- `JOB_FINDER_BASE_URL` — `https://jobsonar.vercel.app`
+- `SCORING_TOKEN` — `.env.local`의 값과 동일 (Vercel 환경변수에 넣은 것과 같은 값)
+
+routine은 셸 변수를 물려받지 않으므로, 프롬프트의 `$JOB_FINDER_BASE_URL`과
+`$SCORING_TOKEN`은 실제 값으로 치환해서 등록해야 한다.
 
 ## 한 번에 최대 20건 — 백로그는 여러 밤에 걸쳐 빠진다
 
