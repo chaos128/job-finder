@@ -11,13 +11,11 @@ function requireEnv(name: string): string {
 }
 
 async function main() {
-  const store = createSupabaseStore(
-    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
-  )
   const source = createWantedSource()
 
-  // --url 이 주어지면 검색을 먼저 등록한다 (최초 1회용).
+  // --url 이 주어지면 검색을 먼저 등록한다 (최초 1회용). 이 경로는 SQL만 출력하고
+  // DB에 접속하지 않으므로, Supabase store는 아래에서 이 분기를 지난 뒤에 만든다 —
+  // 그래야 --url 모드가 Supabase 자격 증명 없이도 동작한다.
   const urlArg = process.argv.indexOf('--url')
   if (urlArg !== -1) {
     const url = process.argv[urlArg + 1]
@@ -30,6 +28,11 @@ async function main() {
     )
     return
   }
+
+  const store = createSupabaseStore(
+    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
+    requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+  )
 
   const searches = await store.listEnabledSearches()
   if (searches.length === 0) {
@@ -50,15 +53,27 @@ async function main() {
       `detailed=${report.detailed} failed=${report.failed.length}`,
     )
     for (const f of report.failed) {
-      console.warn(`  ! ${f.itemId}: ${f.code} ${f.message} (retryable=${f.retryable})`)
+      console.warn(`  ! [${f.node}] ${f.itemId}: ${f.code} ${f.message} (retryable=${f.retryable})`)
     }
-    if (report.detailed === 0 && !report.hitDetailLimit) break
+    // detailed === 0 && !hitDetailLimit만으로는 부족하다: 마지막 배치가 limit보다
+    // 작은 채로(hitDetailLimit=false) 전부 일시 실패하면(detailed=0) 재시도할 건이
+    // 남아있는데도 여기서 멈추게 된다. listJobsNeedingDetail로 실제로 남은 게
+    // 있는지 확인하고 있으면 계속한다 — 재시도 상한(3회)에 도달한 건은 이 조회에서
+    // 자동으로 빠지므로(detail_status='failed'로 전환), 루프는 결국 끝난다.
+    if (report.detailed === 0 && !report.hitDetailLimit) {
+      const stillPending = await store.listJobsNeedingDetail(1)
+      if (stillPending.length === 0) break
+    }
   }
 
-  const remaining = await store.listJobsNeedingDetail(1)
+  const stillPending = await store.listJobsNeedingDetail(1)
   console.log(
-    `\n백필 완료. 상세 처리 ${totalDetailed}건, ` +
-    `남은 대기 ${remaining.length === 0 ? '없음' : '있음 (재시도 상한 도달분 확인 필요)'}`,
+    `\n백필 완료. 상세 처리 ${totalDetailed}건.\n` +
+    (stillPending.length === 0
+      ? '재시도 가능한 대기 건 없음.'
+      : '재시도 가능한 대기 건이 남아있음 — pnpm backfill을 다시 실행하면 이어서 처리됩니다.') +
+    '\n(참고: 이 조회는 재시도 상한(3회)에 도달해 detail_status=\'failed\'로 넘어간 건은 ' +
+    '보여주지 않는다 — 그 목록은 jobs 테이블에서 detail_status=\'failed\'를 직접 조회해야 한다.)',
   )
 }
 
