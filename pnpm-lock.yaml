@@ -29,6 +29,9 @@ importers:
       '@job-finder/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@job-finder/mailer':
+        specifier: workspace:*
+        version: link:../../packages/mailer
       '@job-finder/scoring':
         specifier: workspace:*
         version: link:../../packages/scoring
