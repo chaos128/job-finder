@@ -22,3 +22,6 @@ resume.pdf
 
 # OS
 .DS_Store
+
+# SDD 실행 워크스페이스 (스크래치)
+.superpowers/
