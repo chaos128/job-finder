@@ -1,6 +1,7 @@
 import { getStore } from '@/lib/store'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { BookmarkToggle } from '../_components/bookmark-toggle'
 import { ScoreBars } from '../_components/score-bars'
 
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <div className="flex items-center gap-4 pt-2">
           {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums) */}
           <span className="text-3xl font-semibold tabular-nums">{score.total}</span>
+          {/* 북마크 여부는 공고 전문을 읽고 나서 정해진다 — 목록보다 여기가 제자리다. */}
+          <BookmarkToggle jobId={job.id} initial={job.bookmarked} />
           <a href={job.url} target="_blank" rel="noreferrer"
             className="rounded-full border border-neutral-300 px-4 py-1.5 text-sm hover:bg-neutral-100">
             원티드에서 보기

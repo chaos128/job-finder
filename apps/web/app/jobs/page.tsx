@@ -29,7 +29,11 @@ export default async function Page() {
         <h1 className="text-3xl font-bold tracking-tight">채점된 공고</h1>
         <p className="text-neutral-600">점수 순으로 정렬돼 있다. 최소 점수·북마크·발송 여부로 좁혀볼 수 있다.</p>
       </header>
-      <StatusStrip stats={stats} pendingNotify={pendingCount} now={now} />
+      <StatusStrip
+        stats={stats}
+        pendingNotify={{ count: pendingCount, topN: profile.notifyRule.topN }}
+        now={now}
+      />
       <JobList initialRows={first.rows} initialCursor={first.nextCursor} />
     </main>
   )
