@@ -11,6 +11,9 @@ export function isScoringStale(lastScoredAt: string | null, now: Date): boolean 
 export function formatRelativeTime(at: string | null, now: Date): string {
   if (!at) return '없음'
   const min = Math.floor((now.getTime() - new Date(at).getTime()) / 60_000)
+  // started_at은 Postgres now(), 여기 now는 Node Date라 시계가 어긋나면 미래 시각이 온다
+  // (실측: 8건 중 1건이 ended_at이 started_at보다 1442ms 빨랐다). 음수를 그대로 찍으면 "-1분 전".
+  if (min <= 0) return '방금 전'
   if (min < 60) return `${min}분 전`
   if (min < 1440) return `${Math.floor(min / 60)}시간 전`
   return `${Math.floor(min / 1440)}일 전`
