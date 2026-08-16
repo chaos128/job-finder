@@ -83,6 +83,10 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 - **Build Command에 `--turbopack`을 붙이지 말 것.** `next.config.ts`의
   `webpack.resolve.extensionAlias`가 ESM `.js`→`.ts` 해석을 푸는데 Turbopack은 이 콜백을
   무시한다. 워크스페이스 패키지 import가 전부 깨진다.
+- **함수 리전은 `icn1`(서울)로 고정한다** — `vercel.json`의 `"regions": ["icn1"]`.
+  JSON이라 파일에 주석을 못 달아 여기 남긴다. 기본값 `iad1`(워싱턴)이면 Supabase
+  프로젝트(서울)와 태평양을 사이에 두게 되고, 서버 컴포넌트가 질의할 때마다 그 왕복이
+  붙는다. 실측: `/jobs` TTFB가 `x-vercel-id: icn1::iad1::…` 상태에서 1.4~3.4초였다.
 
 ### 5. Vercel 환경변수
 
