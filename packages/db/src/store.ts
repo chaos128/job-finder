@@ -1,7 +1,7 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source,
+  Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source, UnscoredJob,
 } from './types.js'
 
 export interface Store {
@@ -37,6 +37,8 @@ export interface Store {
   getJobDetail(jobId: string): Promise<ScoredJob | null>
   getDashboardStats(): Promise<DashboardStats>
   setJobBookmarked(jobId: string, bookmarked: boolean): Promise<void>
+  /** 아직 status='ok' 점수가 없는 공고. 채점 실패분도 포함한다. */
+  listUnscoredJobs(limit: number): Promise<UnscoredJob[]>
 
   // ── 관측
   /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */

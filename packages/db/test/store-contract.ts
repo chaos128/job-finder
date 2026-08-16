@@ -334,5 +334,31 @@ export function describeStoreContract(
       const page = await store.listDashboardJobs({ limit: 10 })
       expect(page.rows[0]!.summary).toBe('핀테크 스타트업에서 결제 웹 프론트엔드를 맡는 자리다.')
     })
+
+    test('미채점 목록은 아직 채점되지 않은 공고만 준다', async () => {
+      const created = await store.insertJobs([job('1'), job('2'), job('3')])
+      await store.saveScore({
+        jobId: created[0]!.id, total: 70,
+        breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
+        reasoning: 'r', summary: 's', scorer: 'routine', rubricVersion: 'v5',
+      })
+      const rows = await store.listUnscoredJobs(10)
+      expect(rows.map((r) => r.companyName)).toHaveLength(2)
+      expect(rows.map((r) => r.jobId)).not.toContain(created[0]!.id)
+    })
+
+    // 채점에 실패한 공고도 "아직 점수가 없는" 상태다 — 목록에서는 빠지지만
+    // 대기 목록에는 보여야 소유자가 왜 안 올라오는지 알 수 있다.
+    test('채점 실패한 공고도 미채점 목록에 남는다', async () => {
+      const [created] = await store.insertJobs([job('1')])
+      await store.recordScoreFailure(created!.id, 'schema mismatch')
+      const rows = await store.listUnscoredJobs(10)
+      expect(rows.map((r) => r.jobId)).toEqual([created!.id])
+    })
+
+    test('미채점 목록은 상한을 지킨다', async () => {
+      await store.insertJobs([job('1'), job('2'), job('3')])
+      expect(await store.listUnscoredJobs(2)).toHaveLength(2)
+    })
   })
 }

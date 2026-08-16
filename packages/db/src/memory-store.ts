@@ -3,6 +3,7 @@ import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
+  UnscoredJob,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -221,6 +222,17 @@ export class MemoryStore implements Store {
   async setJobBookmarked(jobId: string, bookmarked: boolean) {
     const job = this.jobs.get(jobId)
     if (job) this.jobs.set(jobId, { ...job, bookmarked })
+  }
+
+  async listUnscoredJobs(limit: number): Promise<UnscoredJob[]> {
+    return [...this.jobs.values()]
+      .filter((job) => !job.hidden && this.scores.get(job.id)?.status !== 'ok')
+      .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt))
+      .slice(0, limit)
+      .map((job) => ({
+        jobId: job.id, companyName: job.companyName, position: job.position,
+        url: job.url, dueTime: job.dueTime, firstSeenAt: job.firstSeenAt,
+      }))
   }
 
   async getDashboardStats(): Promise<DashboardStats> {

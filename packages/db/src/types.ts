@@ -159,3 +159,16 @@ export interface DashboardStats {
   rubricVersions: Record<string, number>
   recentRuns: RunSummary[]
 }
+
+/**
+ * 아직 채점되지 않은 공고. 점수가 없으므로 DashboardRow와 같은 모양일 수 없고,
+ * 커서 페이징(total 기준)도 적용되지 않는다 — 상한만 걸어 한 번에 받는다.
+ */
+export interface UnscoredJob {
+  jobId: string
+  companyName: string
+  position: string
+  url: string
+  dueTime: string | null
+  firstSeenAt: string
+}

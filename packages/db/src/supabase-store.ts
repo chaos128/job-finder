@@ -4,7 +4,7 @@ import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
-  SearchParams, Source,
+  SearchParams, Source, UnscoredJob,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -70,6 +70,17 @@ type DashboardJoinRow = {
     id: string; company_name: string; position: string; url: string
     due_time: string | null; bookmarked: boolean; hidden: boolean
   }
+}
+
+/**
+ * scores.job_id가 jobs.id를 참조하는 PK/FK라 1:1이고, PostgREST는 매칭되는
+ * 자식이 없으면 null을 준다(배열이 아니다 — 운영 DB로 직접 확인함, 아래
+ * listUnscoredJobs 주석 참고).
+ */
+type UnscoredJobRow = {
+  id: string; company_name: string; position: string; url: string
+  due_time: string | null; first_seen_at: string
+  scores: { status: string } | null
 }
 
 // scores.job_id is both primary key and FK -> jobs, so this is a 1:1
@@ -382,6 +393,37 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (!isUuid(jobId)) return
       const { error } = await db.from('jobs').update({ bookmarked }).eq('id', jobId)
       if (error) throw new Error(error.message)
+    },
+
+    async listUnscoredJobs(limit: number): Promise<UnscoredJob[]> {
+      // PostgREST의 `!left` embed에 건 필터는 자식(scores)만 걸러내고 부모(jobs)는
+      // 제외하지 않는다 — 조건에 안 맞는 자식이 있어도 부모 행은 scores: null을
+      // 단 채 그대로 돌아온다. 운영 DB(168/168 채점 완료 상태)에 직접
+      // `jobs!left(scores).or('status.is.null,status.neq.ok', {referencedTable:'scores'})`를
+      // 날려 확인했다 — 기대와 달리 0행이 아니라 (limit만큼) 행이 돌아왔고, 전부
+      // scores: null이었다(실제로는 모든 job에 status='ok' 행이 있는데도). 그래서
+      // 서버 필터를 믿지 않고 이 함수 안에서 직접 판정한다.
+      //
+      // 서버 limit도 못 쓴다 — 필터링이 fetch 이후에 일어나므로 limit건을 받았는데
+      // 그중 채점된 게 많으면 결과가 모자랄 수 있다. 넉넉히 받아 자른다. 하루치
+      // 신규 수집분은 적다는 전제(브리핑 참고)라 이 상한이면 충분하다.
+      const OVER_FETCH = Math.max(limit * 10, 500)
+      const rows = unwrap<UnscoredJobRow[]>(
+        await db.from('jobs')
+          .select<string, UnscoredJobRow>(
+            'id, company_name, position, url, due_time, first_seen_at, scores(status)',
+          )
+          .eq('hidden', false)
+          .order('first_seen_at', { ascending: true })
+          .limit(OVER_FETCH),
+      )
+      return rows
+        .filter((r) => r.scores?.status !== 'ok')
+        .slice(0, limit)
+        .map((r) => ({
+          jobId: r.id, companyName: r.company_name, position: r.position,
+          url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
+        }))
     },
 
     async getDashboardStats(): Promise<DashboardStats> {

@@ -5,6 +5,7 @@ import { Badge, Button, cn, Input } from '@job-finder/ui'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { loadMoreJobs, toggleBookmark } from '../actions'
 import { JobCard } from './job-card'
+import { UnscoredList } from './unscored-list'
 
 export function JobList({ initialRows, initialCursor }: {
   initialRows: DashboardRow[]; initialCursor: DashboardCursor | null
@@ -15,6 +16,9 @@ export function JobList({ initialRows, initialCursor }: {
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const sentinel = useRef<HTMLDivElement>(null)
+  // 점수 목록의 질의(필터·커서·무한스크롤)와는 완전히 무관하다 — 켜지면 아래에
+  // 별도 구간을 하나 더 붙일 뿐이다.
+  const [showUnscored, setShowUnscored] = useState(false)
 
   // 필터가 바뀔 때마다 늘어나는 세대 번호. cancelled 플래그 하나로는 필터→필터
   // 경쟁만 막힌다 — 스크롤 응답이 필터 교체 "이후"에 도착하는 역방향 경쟁은 못
@@ -123,6 +127,19 @@ export function JobList({ initialRows, initialCursor }: {
         >
           미발송만
         </button>
+        <button
+          type="button"
+          aria-pressed={showUnscored}
+          onClick={() => setShowUnscored((v) => !v)}
+          className={cn(
+            'h-9 rounded-full border px-4 font-medium transition-colors',
+            showUnscored
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+          )}
+        >
+          미채점 포함
+        </button>
         <Badge className="ml-auto">{rows.length}건</Badge>
       </div>
 
@@ -147,6 +164,8 @@ export function JobList({ initialRows, initialCursor }: {
       <div ref={sentinel} className="h-8 text-center text-sm text-neutral-400">
         {pending ? '불러오는 중…' : cursor ? '' : '끝'}
       </div>
+
+      {showUnscored && <UnscoredList />}
     </section>
   )
 }
