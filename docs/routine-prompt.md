@@ -82,8 +82,14 @@ routine을 하루에 여러 번 실행하거나, 프롬프트의 1~5단계를 �
 첫 실행 후 Supabase에서:
 
 ```sql
-select total, breakdown, left(reasoning, 60) from scores order by scored_at desc limit 10;
+select total, breakdown, left(reasoning, 60), left(summary, 60)
+from scores order by scored_at desc limit 10;
 ```
 
+`summary`는 필수 필드다 — 빠지면 그 항목은 rejected되고 실패 횟수만 올라가므로,
+첫 실행에서 실제로 채워졌는지 눈으로 확인한다(빈 문자열이면 옛 프롬프트로 돈 것이다).
+
 점수가 극단(전부 90+ 또는 전부 40-)에 몰려 있으면 루브릭 앵커를 조정하고
-`packages/scoring/src/rubric.ts`의 `RUBRIC_VERSION`을 올린다.
+`packages/scoring/src/rubric.ts`의 `RUBRIC_VERSION`을 올린다. **버전은 채점 기준이
+바뀔 때만 올린다** — 출력 형식만 바뀌었으면 그대로 둔다. 안 그러면 대시보드의 "혼재"
+경고가 점수 비교가 멀쩡한 상황에서 켜지고, 재채점 없이는 끌 수 없다.
