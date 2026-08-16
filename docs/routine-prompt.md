@@ -59,7 +59,7 @@ routine을 하루에 여러 번 실행하거나, 프롬프트의 1~5단계를 �
    curl -s -X POST "$JOB_FINDER_BASE_URL/api/scoring/results" \
      -H "Authorization: Bearer $SCORING_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '[{"jobId":"...","total":72,"breakdown":{"stack":18,"role":16,"domain":14,"growth":12,"conditions":12},"reasoning":"...","summary":"핀테크 스타트업에서 결제 시스템 백엔드를 맡는 자리다."}]'
+     -d '[{"jobId":"...","total":72,"breakdown":{"stack":18,"role":16,"domain":14,"growth":12,"conditions":12},"reasoning":"...","summary":"핀테크 스타트업으로, 결제 인프라와 정산 시스템을 서비스한다. 이 역할은 결제 시스템 백엔드를 맡아 트랜잭션 처리와 정산 배치를 개발한다. 팀 규모가 작아 설계 단계부터 폭넓게 관여할 수 있다는 점이 특징이다."}]'
 
    형식 규칙:
    - breakdown의 키는 정확히 5개(stack, role, domain, growth, conditions)
@@ -67,7 +67,7 @@ routine을 하루에 여러 번 실행하거나, 프롬프트의 1~5단계를 �
    - total은 5개 값의 합과 정확히 일치해야 한다
    - jobId는 pending 응답에서 받은 값 그대로(uuid)
    - reasoning은 2~4문장, 왜 그 점수인지 축별로 드러나게
-   - summary는 이 공고가 어떤 일인지 한 문장(140자 이내). 채점 근거가 아니라 공고 자체 요약
+   - summary는 이 공고가 어떤 일인지 약 세 문장(400자 이내). 채점 근거가 아니라 공고 자체 요약
 
 7. 응답의 accepted 수와 rejected 배열을 보고한다.
    검증은 항목 단위라, 일부가 형식에 안 맞아도 나머지는 저장되고 200이 온다.

@@ -77,8 +77,8 @@ test('summary가 없으면 거부한다', () => {
   expect(() => scoreSubmissionSchema.parse([rest])).toThrow()
 })
 
-test('summary가 140자를 넘으면 거부한다', () => {
-  expect(() => scoreSubmissionSchema.parse([{ ...valid, summary: '가'.repeat(141) }])).toThrow()
+test('summary가 400자를 넘으면 거부한다', () => {
+  expect(() => scoreSubmissionSchema.parse([{ ...valid, summary: '가'.repeat(401) }])).toThrow()
 })
 
 test('jobId가 uuid가 아니면 거부한다', () => {

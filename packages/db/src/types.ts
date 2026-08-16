@@ -69,7 +69,7 @@ export interface ScoreInput {
   total: number
   breakdown: Record<string, number>
   reasoning: string
-  /** 공고가 어떤 일인지 한 문장. 목록 카드에 그대로 실린다. */
+  /** 공고가 어떤 일인지 약 세 문장. 목록 카드에 그대로 실린다. */
   summary: string
   scorer: Scorer
   rubricVersion: string
@@ -126,7 +126,7 @@ export interface DashboardRow {
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null
-  /** 채점 시 함께 받은 JD 한 줄 요약. 0004 이전 행은 빈 문자열(reasoning과 같은 관례). */
+  /** 채점 시 함께 받은 JD 요약(약 세 문장). 0004 이전 행은 빈 문자열(reasoning과 같은 관례). */
   summary: string
 }
 

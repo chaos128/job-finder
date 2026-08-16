@@ -14,8 +14,8 @@ export const scoreItemSchema = z
     total: z.number().int().min(0).max(RUBRIC_AXES.length * MAX_AXIS_SCORE),
     breakdown: breakdownSchema,
     reasoning: z.string().min(1),
-    /** 공고가 어떤 일인지 한 문장. 목록 카드에 그대로 실린다. */
-    summary: z.string().min(1).max(140),
+    /** 공고가 어떤 일인지 약 세 문장. 목록 카드에 그대로 실린다. */
+    summary: z.string().min(1).max(400),
   })
   .refine(
     (v) => Object.values(v.breakdown).reduce((a, b) => a + b, 0) === v.total,
