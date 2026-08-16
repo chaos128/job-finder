@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import type { DashboardCursor, DashboardPage, NewJob, Store } from '../src/index.js'
+import type {
+  DashboardCursor, DashboardPage, NewJob, RunPipeline, RunTrigger, Store,
+} from '../src/index.js'
 
 const job = (externalId: string): NewJob => ({
   source: 'wanted',
@@ -242,6 +244,11 @@ export function describeStoreContract(
       expect(await store.getJobDetail('없는-id')).toBeNull()
     })
 
+    test('getJobDetail은 채점되지 않은 job에는 null을 준다', async () => {
+      const [inserted] = await store.insertJobs([job('1')])
+      expect(await store.getJobDetail(inserted!.id)).toBeNull()
+    })
+
     test('setJobBookmarked는 값을 뒤집고 목록에 반영된다', async () => {
       const [created] = await seedScored(store, [{ ext: '1', total: 70 }])
       await store.setJobBookmarked(created!.id, true)
@@ -260,6 +267,21 @@ export function describeStoreContract(
       expect(stats.lastScoredAt).not.toBeNull()
     })
 
+    // status 필터를 통째로 빼도 위 테스트는 그대로 통과한다 — seedScored는
+    // saveScore만 호출해서 실패 케이스가 섞이지 않기 때문이다. recordScoreFailure가
+    // 남기는 자리표시자(rubricVersion 'v1', scoredAt 기본값)가 건수·분포를
+    // 오염시키지 않는지 별도로 확인해야 한다.
+    test('getDashboardStats는 실패한 채점을 건수와 루브릭 분포에서 제외한다', async () => {
+      const [scored] = await seedScored(store, [{ ext: '1', total: 70 }])
+      const expectedScoredAt = (await store.getJobDetail(scored!.id))!.score.scoredAt
+      const [failed] = await store.insertJobs([job('2')])
+      await store.recordScoreFailure(failed!.id, 'boom')
+      const stats = await store.getDashboardStats()
+      expect(stats.scoredJobs).toBe(1)
+      expect(stats.rubricVersions).toEqual({ v3: 1 })
+      expect(stats.lastScoredAt).toBe(expectedScoredAt)
+    })
+
     test('startRun은 pipeline을 기록하고 getDashboardStats가 되돌려준다', async () => {
       await store.startRun('collect', 'cron')
       await store.startRun('notify', 'manual')
@@ -267,6 +289,26 @@ export function describeStoreContract(
       const pipelines = stats.recentRuns.map((r) => r.pipeline)
       expect(pipelines).toContain('collect')
       expect(pipelines).toContain('notify')
+    })
+
+    // 커서/필터 조합과 마찬가지로 recentRuns도 "5건 상한"과 "최근 것이 먼저"라는
+    // 두 성질을 동시에 지켜야 한다. total 커서 테스트처럼 toContain만 확인하면
+    // 순서가 뒤집히거나 상한이 빠져도 통과해 버린다. MemoryStore는 타임스탬프를
+    // epoch로 고정해 시각으로는 순서를 검증할 수 없으므로, pipeline·trigger
+    // 조합(2×3=6가지, 모두 겹치지 않게 구성 가능)으로 삽입 순서를 추적한다.
+    test('getDashboardStats의 recentRuns는 최근 5건만 최신순으로 준다', async () => {
+      const specs: [RunPipeline, RunTrigger][] = [
+        ['collect', 'cron'], ['collect', 'manual'], ['collect', 'cli'],
+        ['notify', 'cron'], ['notify', 'manual'], ['notify', 'cli'],
+      ]
+      for (const [pipeline, trigger] of specs) await store.startRun(pipeline, trigger)
+      const stats = await store.getDashboardStats()
+      expect(stats.recentRuns).toHaveLength(5)
+      const seen = stats.recentRuns.map((r) => `${r.pipeline}:${r.trigger}`)
+      // 가장 먼저 시작한 실행(collect:cron)은 상한에 밀려 빠지고, 나머지는
+      // 나중에 시작한 순서대로(최신 우선) 나와야 한다.
+      const expected = [...specs].reverse().slice(0, 5).map(([p, t]) => `${p}:${t}`)
+      expect(seen).toEqual(expected)
     })
 
     // status 필터를 빠뜨려도 위 테스트들은 다 통과한다 — 실패한 채점은 애초에
