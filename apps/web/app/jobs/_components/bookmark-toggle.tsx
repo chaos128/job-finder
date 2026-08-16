@@ -2,6 +2,7 @@
 
 import { Button } from '@job-finder/ui'
 import { useState, useTransition } from 'react'
+import { errorText } from '@/lib/dashboard'
 import { toggleBookmark } from '../actions'
 
 /**
@@ -23,7 +24,7 @@ export function BookmarkToggle({ jobId, initial }: { jobId: string; initial: boo
         await toggleBookmark(jobId, next)
       } catch (e) {
         setBookmarked(!next)
-        setError(e instanceof Error ? e.message : String(e))
+        setError(errorText(e))
       }
     })
   }

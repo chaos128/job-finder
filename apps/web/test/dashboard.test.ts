@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { axisPercent, formatRelativeTime, isScoringStale } from '@/lib/dashboard'
+import { axisPercent, errorText, formatRelativeTime, isScoringStale } from '@/lib/dashboard'
 
 const NOW = new Date('2026-08-16T00:00:00Z')
 
@@ -36,4 +36,18 @@ test('축 점수를 막대 비율로 바꾼다', () => {
   expect(axisPercent(20)).toBe(100)
   expect(axisPercent(10)).toBe(50)
   expect(axisPercent(0)).toBe(0)
+})
+
+// 프로덕션 Next는 서버 에러의 message를 일반 문구로 갈아치우고 digest만 남긴다.
+// digest까지 버리면 로그 수집기가 없는 이 저장소에서 대조할 단서가 0이 된다.
+test('Server Action 에러 문구에 digest를 함께 싣는다', () => {
+  const e = Object.assign(new Error('An error occurred in the Server Components render.'), {
+    digest: '3807785809',
+  })
+  expect(errorText(e)).toContain('3807785809')
+})
+
+test('digest가 없으면 메시지만 남긴다', () => {
+  expect(errorText(new Error('boom'))).toBe('boom')
+  expect(errorText('boom')).toBe('boom')
 })

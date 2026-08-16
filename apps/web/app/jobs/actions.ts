@@ -1,6 +1,6 @@
 'use server'
 
-import type { DashboardCursor, DashboardFilters, DashboardPage, UnscoredJob } from '@job-finder/db'
+import type { DashboardCursor, DashboardFilters, DashboardPage, UnscoredJobs } from '@job-finder/db'
 import { revalidatePath } from 'next/cache'
 import { getStore } from '@/lib/store'
 import { PAGE_SIZE, UNSCORED_LIMIT } from './constants'
@@ -23,6 +23,6 @@ export async function toggleBookmark(jobId: string, next: boolean): Promise<void
 }
 
 /** 토글이 켜질 때만 호출된다 — 채점된 목록의 질의와는 무관한 별도 구간이다. */
-export async function loadUnscoredJobs(): Promise<UnscoredJob[]> {
+export async function loadUnscoredJobs(): Promise<UnscoredJobs> {
   return getStore().listUnscoredJobs(UNSCORED_LIMIT)
 }

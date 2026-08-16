@@ -1,8 +1,9 @@
 'use client'
 
-import type { UnscoredJob } from '@job-finder/db'
+import type { UnscoredJobs } from '@job-finder/db'
 import { Badge } from '@job-finder/ui'
 import { useEffect, useState } from 'react'
+import { errorText } from '@/lib/dashboard'
 import { loadUnscoredJobs } from '../actions'
 
 /**
@@ -10,21 +11,34 @@ import { loadUnscoredJobs } from '../actions'
  * 주므로 상세 페이지로는 링크하지 않는다 — 원티드 원본 링크만 건다.
  */
 export function UnscoredList() {
-  const [rows, setRows] = useState<UnscoredJob[] | null>(null)
+  const [page, setPage] = useState<UnscoredJobs | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     loadUnscoredJobs()
-      .then((data) => { if (!cancelled) setRows(data) })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+      .then((data) => { if (!cancelled) setPage(data) })
+      .catch((e) => { if (!cancelled) setError(errorText(e)) })
     return () => { cancelled = true }
   }, [])
+
+  const rows = page?.rows ?? null
+  // 헤더에 rows.length를 찍으면 상한(UNSCORED_LIMIT)에서 화면이 거짓말을 한다 —
+  // 137건 대기 중에도 "100건"으로 읽히고 더 있다는 표시가 없다. 채점은 수동으로
+  // 하루 20건이라 며칠만 멈춰도 도달하는 값이다. 총량과 표시량을 갈라 적는다.
+  const total = page?.total ?? 0
+  const truncated = rows !== null && total > rows.length
 
   return (
     <section className="space-y-3 border-t border-neutral-200 pt-6">
       <h2 className="text-lg font-medium">
-        채점 대기 {rows ? rows.length : 0}건
+        채점 대기 {total}건
+        {/* 정렬이 오래된 수집분 순이라 잘려 나가는 쪽은 최신 수집분이다. */}
+        {truncated && (
+          <span className="ml-2 text-sm font-normal text-neutral-400">
+            오래된 순 {rows.length}건만 표시
+          </span>
+        )}
       </h2>
 
       {error && (
