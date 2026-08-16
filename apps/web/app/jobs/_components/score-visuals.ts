@@ -1,24 +1,31 @@
+import { AXIS_COLORS, type Axis } from '@job-finder/ui'
+
 /**
- * 다섯 축 고정 색상과 총점 밴드. 카드의 세그먼트 바, 상세 ScoreBars의 개별 막대가
- * 이 매핑을 함께 쓴다 — "같은 축은 어디서나 같은 색"이 여기 하나로 강제된다.
- * packages/ui의 Badge variant(stack/role/domain/growth/conditions)와 같은 색
- * 계열이어야 하므로, 바꿀 때 그쪽도 함께 고쳐라.
+ * 카드 세그먼트 바·상세 ScoreBars가 쓰는 축별 막대 색. 값의 정의처는
+ * `@job-finder/ui`의 axis-colors.ts 하나뿐이다 — 여기서는 그 `bar` 필드만 뽑아 쓴다.
+ * packages/ui는 apps/web을 import할 수 없어 반대 방향(여기서 저쪽을 import)으로 둔다.
  */
-export const AXIS_BAR_COLOR: Record<string, string> = {
-  stack: 'bg-green-500',
-  role: 'bg-cyan-500',
-  domain: 'bg-blue-500',
-  growth: 'bg-violet-500',
-  conditions: 'bg-fuchsia-500',
+export const AXIS_BAR_COLOR: Record<Axis, string> = {
+  stack: AXIS_COLORS.stack.bar,
+  role: AXIS_COLORS.role.bar,
+  domain: AXIS_COLORS.domain.bar,
+  growth: AXIS_COLORS.growth.bar,
+  conditions: AXIS_COLORS.conditions.bar,
 }
 
 /**
  * 실측(168건, 2026-08-16) total 분포: min 17 / p50 53 / p90 74 / max 84.
- * 상위권(70+, 상위 약 18%)만 강조하고 하위권(30 이하, 하위 약 10%)은 옅게 죽인다 —
- * 카드 대부분을 차지하는 중간대는 손대지 않는다("카드마다 소리 지르지 않는다").
+ * 하위권(30점 이하, 하위 약 10%)만 옅게 죽인다 — 명도 차이라 축 색상과 겹치지 않는다.
+ *
+ * 상위권에는 색을 얹지 않는다. 원래는 emerald-600(OKLCH 약 163도)으로 강한 매치를
+ * 강조했는데, 그 시점의 stack 축 색(green-500, 약 150도)과 14도밖에 안 떨어져 있어
+ * 84점 카드에서 총점 숫자와 stack 세그먼트가 둘 다 그냥 "초록"으로 읽혔다 — 팔레트가
+ * 이미 쓰고 있는 색상 위에 총점 강도라는 여섯 번째 의미가 얹힌 것이다(리뷰 지적).
+ * 다른 색상으로 옮기는 대신 아예 뺐다: 다섯 축 팔레트가 이미 쓸 수 있는 색상 공간을
+ * 채우고 있고(amber는 경고, red는 에러 전용), 세그먼트 바가 이미 구성을, 큰 숫자
+ * 자체가 이미 크기로 강도를 전달하므로 색조가 없어도 된다.
  */
 export function scoreBandClass(total: number): string {
-  if (total >= 70) return 'text-emerald-600'
   if (total <= 30) return 'text-neutral-400'
   return ''
 }

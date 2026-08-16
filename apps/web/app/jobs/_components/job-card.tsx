@@ -24,9 +24,21 @@ export function JobCard({ row, onToggleBookmark }: {
         {/* 축별 구성 세그먼트 바 — 숫자를 읽기 전에 매치의 모양이 먼저 보이게 한다.
             트랙 100%가 만점 100점이라 채워진 길이 자체가 총점이고, 색 구간이 축 배분이다. */}
         <div className="flex h-2 w-full overflow-hidden rounded-full bg-neutral-100">
-          {AXES.map((a) => (
-            <div key={a} className={cn('h-full', AXIS_BAR_COLOR[a])} style={{ width: `${row.breakdown[a] ?? 0}%` }} />
-          ))}
+          {AXES.map((a) => {
+            const v = row.breakdown[a] ?? 0
+            return (
+              <div
+                key={a}
+                className={cn('h-full shrink-0', AXIS_BAR_COLOR[a])}
+                // 0점 축은 폭 0(기여가 없다는 뜻을 그대로 보여준다). 그 외에는 비율이
+                // 아무리 작아도 최소 8px(막대 높이와 같음)을 보장해 다섯 구간이 항상
+                // 보이게 한다 — 실측(총점 17, 배분 1/1/3/10/2, 677px 트랙)에서 stack·role이
+                // 6.8px로 뭉개져 안 보였다. 중앙값(53점) 기준 카드 절반가량이 이 문제를
+                // 겪는다. 트레이드오프: 저점수 축에서는 실제 비율보다 살짝 부풀어 보인다.
+                style={{ width: v > 0 ? `max(${v}%, 8px)` : '0px' }}
+              />
+            )
+          })}
         </div>
         {/* line-clamp-6: 실측(168건) summary 길이가 170~313자로 좁게 몰려 있어(p95 277,
             최댓값 313) 6줄이면 사실상 전부 잘리지 않는다. 그래도 상한은 남긴다 — 이례적으로
