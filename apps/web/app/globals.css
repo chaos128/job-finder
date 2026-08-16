@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Tailwind v4는 워크스페이스 밖 소스를 자동으로 훑지 않는다.
+   packages/ui의 클래스가 빌드에서 누락되지 않도록 명시한다. */
+@source "../../../packages/ui/src";
+
+@theme {
+  /* Poppins에는 한글 글리프가 없다. 화면 대부분이 한국어이므로 실제 적용은
+     숫자·영문·제목이고 한글은 뒤 폴백으로 떨어진다. */
+  --font-sans: var(--font-poppins), Pretendard, -apple-system, system-ui, sans-serif;
+}
