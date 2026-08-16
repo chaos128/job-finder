@@ -56,10 +56,10 @@ export function JobCard({ row, onToggleBookmark, onToggleHidden }: {
             )
           })}
         </div>
-        {/* line-clamp-6: 실측(168건) summary 길이가 170~313자로 좁게 몰려 있어(p95 277,
-            최댓값 313) 6줄이면 사실상 전부 잘리지 않는다. 그래도 상한은 남긴다 — 이례적으로
-            긴 값이 들어와도 카드 하나가 목록 리듬을 무너뜨릴 만큼 길어지지 않게. */}
-        <p className="line-clamp-6 text-sm text-neutral-600">{row.summary}</p>
+        {/* 줄 수 상한을 두지 않는다. 포지션 제목과 같은 이유로, 잘린 요약은 무슨 일인지
+            판단할 재료를 없앤다. 루브릭이 summary를 400자로 제한하고 실측(168건)도
+            170~313자에 몰려 있어 카드가 무한정 길어지지 않는다. */}
+        <p className="text-sm text-neutral-600">{row.summary}</p>
         <div className="flex flex-wrap gap-1.5">
           {AXES.map((a) => (
             <Badge key={a} variant={a}>

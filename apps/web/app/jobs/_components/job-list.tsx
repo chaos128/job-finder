@@ -128,13 +128,14 @@ export function JobList({ initialRows, initialCursor }: {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {/* 최소 점수·북마크·미발송은 전부 점수가 있어야 뜻이 생기는 조건이라, 미채점만
-            볼 때는 숨긴다. 남겨두면 눌러도 아무 일이 없어 고장으로 읽힌다. */}
-        {!unscoredOnly && (<>
-        <label className="flex items-center gap-2 text-neutral-600">
+            볼 때는 못 누르게 막는다. 숨기지는 않는다 — 토글할 때마다 줄 폭이 통째로
+            바뀌어 아래 목록이 밀린다(CLS). 자리를 지키면서 비활성만 알린다. */}
+        <label className={cn('flex items-center gap-2 text-neutral-600', unscoredOnly && 'opacity-40')}>
           최소 점수
           <Input
             type="number" min={0} max={100} step={5}
-            className="h-9 w-20 rounded-full text-center"
+            disabled={unscoredOnly}
+            className="h-9 w-20 rounded-full text-center disabled:cursor-not-allowed"
             value={filters.minScore ?? ''}
             onChange={(e) => setFilters((f) => ({
               ...f, minScore: e.target.value === '' ? undefined : Number(e.target.value),
@@ -143,31 +144,34 @@ export function JobList({ initialRows, initialCursor }: {
         </label>
         <button
           type="button"
+          disabled={unscoredOnly}
           aria-pressed={!!filters.bookmarkedOnly}
           onClick={() => setFilters((f) => ({ ...f, bookmarkedOnly: !f.bookmarkedOnly }))}
           className={cn(
             'h-9 rounded-full border px-4 font-medium transition-colors',
+            'disabled:cursor-not-allowed disabled:opacity-40',
             filters.bookmarkedOnly
               ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
           )}
         >
           북마크만
         </button>
         <button
           type="button"
+          disabled={unscoredOnly}
           aria-pressed={!!filters.unnotifiedOnly}
           onClick={() => setFilters((f) => ({ ...f, unnotifiedOnly: !f.unnotifiedOnly }))}
           className={cn(
             'h-9 rounded-full border px-4 font-medium transition-colors',
+            'disabled:cursor-not-allowed disabled:opacity-40',
             filters.unnotifiedOnly
               ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
           )}
         >
           미발송만
         </button>
-        </>)}
         <button
           type="button"
           aria-pressed={unscoredOnly}
