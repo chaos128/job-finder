@@ -26,7 +26,9 @@ function Tile({ label, value, caption, warn, warnLabel }: {
 
 /** pendingNotify는 랜딩에서 생략한다 — 그 값을 위해 추가 질의를 하지 않는다. */
 export function StatusStrip({ stats, pendingNotify, now }: {
-  stats: DashboardStats; pendingNotify?: number; now: Date
+  // count와 topN은 따로 의미가 없다 — 후보 수만 받으면 캡션이 발송량을 오해하게
+  // 쓰이므로(아래 주석), 한 덩어리로 받아 둘이 함께 오게 강제한다.
+  stats: DashboardStats; pendingNotify?: { count: number; topN: number }; now: Date
 }) {
   const versions = Object.entries(stats.rubricVersions)
   const stale = isScoringStale(stats.lastScoredAt, now)
@@ -47,8 +49,16 @@ export function StatusStrip({ stats, pendingNotify, now }: {
           warn={stale}
           warnLabel="지연"
         />
-        {pendingNotify !== undefined && (
-          <Tile label="알림 대기" value={`${pendingNotify}건`} caption="발송 예정 공고 수" />
+        {pendingNotify && (
+          <Tile
+            label="알림 대기"
+            value={`${pendingNotify.count}건`}
+            // 이 값은 후보 풀의 크기다. 실제 발송량은 selectForDigest가 topN으로
+            // 잘라 min(풀, topN)이므로, "발송 예정"이라고만 쓰면 후보가 topN을
+            // 넘는 순간(채점이 며칠 멈췄다 몰아 돌린 직후 — 이 화면이 존재하는
+            // 바로 그 상황) 타일이 틀린 문장을 찍는다. 상한을 같이 보여준다.
+            caption={`기준 통과·미발송 (하루 최대 ${pendingNotify.topN}건 발송)`}
+          />
         )}
         <Tile
           label="루브릭"
