@@ -6,6 +6,15 @@ export type NotificationStatus = 'pending' | 'sent' | 'failed'
 export type RunTrigger = 'cron' | 'manual' | 'cli'
 export type RunPipeline = 'collect' | 'notify'
 
+export interface RunSummary {
+  id: string
+  /** 0003 적용 전에 생긴 행은 null이다. 화면에서는 '알 수 없음'으로 표시한다. */
+  pipeline: RunPipeline | null
+  trigger: RunTrigger
+  startedAt: string
+  endedAt: string | null
+}
+
 export interface SearchParams {
   jobGroupId: string
   tagTypeIds: string[]
