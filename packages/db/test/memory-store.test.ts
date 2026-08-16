@@ -22,7 +22,7 @@ test('알림 후보는 상위 200건까지만 돌려준다', async () => {
     })
     await store.saveScore({
       jobId: row.id, total: i, breakdown: {},
-      reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+      reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
     })
   }
 

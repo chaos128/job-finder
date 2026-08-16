@@ -69,11 +69,17 @@ export interface ScoreInput {
   total: number
   breakdown: Record<string, number>
   reasoning: string
+  /** 공고가 어떤 일인지 한 문장. 목록 카드에 그대로 실린다. */
+  summary: string
   scorer: Scorer
   rubricVersion: string
 }
 
-export interface Score extends ScoreInput {
+// summary만 ScoreInput과 다르게(nullable로) 재선언해야 해서 extends 대신 Omit + 교차.
+// 신규 제출은 스키마가 summary를 필수로 강제하지만, 저장된 행은 0004 이전에 채점된
+// 것이거나 채점 실패 placeholder일 수 있어 null일 수 있다.
+export interface Score extends Omit<ScoreInput, 'summary'> {
+  summary: string | null
   status: ScoreStatus
   attempts: number
   error: string | null
@@ -124,17 +130,8 @@ export interface DashboardRow {
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null
-  /**
-   * reasoning의 첫 문장(최대 140자). 전문은 상세에서만 보여준다 —
-   * 168행 기준 전문은 64 KB, 첫 문장만 자르면 20 KB다.
-   */
-  summary: string
-}
-
-/** 한국어 문장은 '다.'로 끝난다. 첫 문장이 없거나 너무 길면 140자에서 자른다. */
-export function summarizeReasoning(reasoning: string): string {
-  const first = reasoning.split(/(?<=다\.)\s/)[0] ?? reasoning
-  return first.length <= 140 ? first : `${first.slice(0, 139)}…`
+  /** 채점 시 함께 받은 JD 한 줄 요약. 0004 이전 행은 null. */
+  summary: string | null
 }
 
 /**

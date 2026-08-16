@@ -1,4 +1,4 @@
-export const RUBRIC_VERSION = 'v3'
+export const RUBRIC_VERSION = 'v4'
 
 export const RUBRIC_AXES = ['stack', 'role', 'domain', 'growth', 'conditions'] as const
 export type RubricAxis = (typeof RUBRIC_AXES)[number]
@@ -18,7 +18,7 @@ export const MAX_AXIS_SCORE = 20
  * `packages/scoring/src` 디렉터리가 없는 실제 배포 환경을 흉내 내면
  * `ENOENT: no such file or directory, open '.../packages/scoring/src/rubric.md'`로 500이 난다.
  */
-const RUBRIC_MARKDOWN = `# 채점 루브릭 v3
+const RUBRIC_MARKDOWN = `# 채점 루브릭 v4
 
 공고 1건을 5개 축으로 채점한다. 각 축 0~20점, 합계 0~100점.
 **반드시 한 번에 한 건만 채점한다.** 여러 건을 한꺼번에 보면 앞 공고가 뒤 공고의 기준점이 된다.
@@ -79,6 +79,10 @@ const RUBRIC_MARKDOWN = `# 채점 루브릭 v3
 \`breakdown\`의 키는 정확히 \`stack\`, \`role\`, \`domain\`, \`growth\`, \`conditions\` 다섯 개다.
 각 값은 0~20 정수이고, \`total\`은 다섯 값의 합과 **정확히 일치**해야 한다.
 \`reasoning\`은 점수의 근거를 2~4문장으로 적는다. 축별로 왜 그 점수인지 드러나야 한다.
+
+\`summary\`는 **이 공고가 어떤 일인지** 한 문장으로 적는다(140자 이내).
+채점 근거가 아니라 공고 자체의 요약이다 — 어떤 회사에서 무슨 제품의 어떤 역할을
+맡는지가 드러나야 한다. "잘 맞는다/안 맞는다"는 \`reasoning\`의 몫이지 여기가 아니다.
 `
 
 export function loadRubric(): string {

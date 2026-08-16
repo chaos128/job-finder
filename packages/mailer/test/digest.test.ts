@@ -16,6 +16,7 @@ function scored(position: string, company: string, total: number): ScoredJob {
     jobId: job.id, total,
     breakdown: { stack: 18, role: 16, domain: 14, growth: 12, conditions: 12 },
     reasoning: '스택이 겹치고 연차가 맞는다.',
+    summary: '요약',
     scorer: 'routine', rubricVersion: 'v1', status: 'ok',
     attempts: 0, error: null, scoredAt: '2026-08-15T01:00:00.000Z', notifiedAt: null,
   } as Score

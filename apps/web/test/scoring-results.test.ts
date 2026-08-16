@@ -26,6 +26,7 @@ function validItem(jobId: string) {
     total: 70,
     breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
     reasoning: '스택이 겹치고 연차도 맞는다.',
+    summary: 'ACME에서 결제 웹 프론트엔드를 맡는 자리다.',
   }
 }
 

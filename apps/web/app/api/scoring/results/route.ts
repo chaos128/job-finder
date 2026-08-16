@@ -41,6 +41,7 @@ export async function POST(req: Request) {
         total: item.total,
         breakdown: item.breakdown,
         reasoning: item.reasoning,
+        summary: item.summary,
         scorer: 'routine',
         rubricVersion: RUBRIC_VERSION,
       })

@@ -29,7 +29,7 @@ async function seedScored(store: MemoryStore, totals: number[], offset = 0) {
     await store.saveScore({
       jobId: job!.id, total,
       breakdown: { stack: 0, role: 0, domain: 0, growth: 0, conditions: 0 },
-      reasoning: 'r', scorer: 'routine', rubricVersion: 'v1',
+      reasoning: 'r', summary: 's', scorer: 'routine', rubricVersion: 'v1',
     })
   }
 }

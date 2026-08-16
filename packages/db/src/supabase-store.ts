@@ -6,7 +6,6 @@ import type {
   NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source,
 } from './types.js'
-import { summarizeReasoning } from './types.js'
 
 const MAX_ATTEMPTS = 3
 
@@ -28,11 +27,10 @@ const NOTIFY_CANDIDATE_SELECT = `*, jobs(
   detail_status, detail_attempts, detail_error, bookmarked, hidden
 )`
 
-// raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning은 DB에서는
-// 그대로 가져오고 서버(listDashboardJobs)에서 첫 문장으로 자른다 — PostgREST에
-// left()가 없고, 줄여야 하는 구간은 서버→브라우저이지 DB→서버가 아니다.
+// raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning도 뺐다 —
+// 채점 근거 전문은 상세에서만 쓰고, 목록 요약은 채점 시 함께 받은 summary를 그대로 싣는다.
 const DASHBOARD_SELECT =
-  'total, breakdown, notified_at, reasoning, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
+  'total, breakdown, notified_at, summary, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
@@ -56,7 +54,7 @@ interface ProfileRow {
 
 interface ScoreRow {
   job_id: string; total: number; breakdown: Record<string, number>
-  reasoning: string; scorer: string; rubric_version: string
+  reasoning: string; summary: string | null; scorer: string; rubric_version: string
   status: string; attempts: number; error: string | null
   scored_at: string; notified_at: string | null
 }
@@ -67,7 +65,7 @@ interface NotificationRow {
 
 type DashboardJoinRow = {
   total: number; breakdown: Record<string, number>; notified_at: string | null
-  reasoning: string
+  summary: string | null
   jobs: {
     id: string; company_name: string; position: string; url: string
     due_time: string | null; bookmarked: boolean; hidden: boolean
@@ -119,7 +117,7 @@ function toJob(row: DigestJobRow & Partial<Pick<JobRow, DetailColumns>>): Job {
 function toScore(row: ScoreRow): Score {
   return {
     jobId: row.job_id, total: row.total, breakdown: row.breakdown,
-    reasoning: row.reasoning, scorer: row.scorer as ScoreInput['scorer'],
+    reasoning: row.reasoning, summary: row.summary, scorer: row.scorer as ScoreInput['scorer'],
     rubricVersion: row.rubric_version, status: row.status as Score['status'],
     attempts: row.attempts, error: row.error,
     scoredAt: row.scored_at, notifiedAt: row.notified_at,
@@ -245,7 +243,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     async saveScore(input: ScoreInput) {
       const { error } = await db.from('scores').upsert({
         job_id: input.jobId, total: input.total, breakdown: input.breakdown,
-        reasoning: input.reasoning, scorer: input.scorer,
+        reasoning: input.reasoning, summary: input.summary, scorer: input.scorer,
         rubric_version: input.rubricVersion,
         status: 'ok', error: null, scored_at: new Date().toISOString(),
       }, { onConflict: 'job_id' })
@@ -361,7 +359,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
         url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked,
         total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
-        summary: summarizeReasoning(r.reasoning),
+        summary: r.summary,
       }))
       const last = rows[rows.length - 1]
       return {

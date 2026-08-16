@@ -21,7 +21,7 @@ const seedScored = async (store: Store, specs: { ext: string; total: number }[])
     await store.saveScore({
       jobId: created[i]!.id, total: spec.total,
       breakdown: { stack: spec.total, role: 0, domain: 0, growth: 0, conditions: 0 },
-      reasoning: `r${spec.ext}`, scorer: 'routine', rubricVersion: 'v3',
+      reasoning: `r${spec.ext}`, summary: `s${spec.ext}`, scorer: 'routine', rubricVersion: 'v3',
     })
   }
   return created
@@ -95,7 +95,7 @@ export function describeStoreContract(
       })
       await store.saveScore({
         jobId: inserted!.id, total: 80, breakdown: { stack: 20 },
-        reasoning: '적합', scorer: 'routine', rubricVersion: 'v1',
+        reasoning: '적합', summary: '요약', scorer: 'routine', rubricVersion: 'v1',
       })
       expect(await store.listJobsNeedingScore(10)).toHaveLength(0)
       const candidates = await store.listNotifyCandidates()
@@ -112,7 +112,7 @@ export function describeStoreContract(
         })
         await store.saveScore({
           jobId: inserted[i]!.id, total, breakdown: {},
-          reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+          reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
         })
       }
       const candidates = await store.listNotifyCandidates()
@@ -127,7 +127,7 @@ export function describeStoreContract(
       })
       await store.saveScore({
         jobId: inserted!.id, total: 80, breakdown: {},
-        reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+        reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
       })
       const n = await store.createNotification([inserted!.id])
       await store.markNotificationSent(n.id)
@@ -161,13 +161,13 @@ export function describeStoreContract(
       })
       await store.saveScore({
         jobId: inserted!.id, total: 80, breakdown: {},
-        reasoning: '', scorer: 'routine', rubricVersion: 'v1',
+        reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
       })
       const n = await store.createNotification([inserted!.id])
       await store.markNotificationSent(n.id)
       await store.saveScore({
         jobId: inserted!.id, total: 90, breakdown: {},
-        reasoning: '재채점', scorer: 'routine', rubricVersion: 'v1',
+        reasoning: '재채점', summary: '재요약', scorer: 'routine', rubricVersion: 'v1',
       })
       expect(await store.listNotifyCandidates()).toHaveLength(0)
     })
@@ -322,29 +322,17 @@ export function describeStoreContract(
       expect(page.rows.map((r) => r.jobId)).toEqual([scored!.id])
     })
 
-    test('목록은 근거 전문이 아니라 첫 문장만 싣는다', async () => {
+    test('목록 요약은 채점 시 받은 값을 그대로 싣는다', async () => {
       const [created] = await store.insertJobs([job('1')])
       await store.saveScore({
         jobId: created!.id, total: 80,
         breakdown: { stack: 16, role: 16, domain: 16, growth: 16, conditions: 16 },
-        reasoning: '첫 문장이다. 둘째 문장이다. 셋째 문장이다.',
-        scorer: 'routine', rubricVersion: 'v3',
+        reasoning: '축별 근거는 여기에 적는다.',
+        summary: '핀테크 스타트업에서 결제 웹 프론트엔드를 맡는 자리다.',
+        scorer: 'routine', rubricVersion: 'v4',
       })
       const page = await store.listDashboardJobs({ limit: 10 })
-      expect(page.rows[0]!.summary).toBe('첫 문장이다.')
-    })
-
-    test('첫 문장이 140자를 넘으면 자르고 말줄임표를 붙인다', async () => {
-      const [created] = await store.insertJobs([job('1')])
-      await store.saveScore({
-        jobId: created!.id, total: 70,
-        breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
-        reasoning: `${'가'.repeat(200)}다. 짧다.`,
-        scorer: 'routine', rubricVersion: 'v3',
-      })
-      const page = await store.listDashboardJobs({ limit: 10 })
-      expect(page.rows[0]!.summary).toHaveLength(140)
-      expect(page.rows[0]!.summary.endsWith('…')).toBe(true)
+      expect(page.rows[0]!.summary).toBe('핀테크 스타트업에서 결제 웹 프론트엔드를 맡는 자리다.')
     })
   })
 }

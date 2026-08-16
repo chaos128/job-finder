@@ -4,7 +4,6 @@ import type {
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
-import { summarizeReasoning } from './types.js'
 
 const MAX_ATTEMPTS = 3
 /** SupabaseStore의 listNotifyCandidates와 같은 상한 — 두 구현이 같은 계약을 지켜야 한다. */
@@ -125,6 +124,7 @@ export class MemoryStore implements Store {
       total: prev?.total ?? 0,
       breakdown: prev?.breakdown ?? {},
       reasoning: prev?.reasoning ?? '',
+      summary: prev?.summary ?? null,
       scorer: prev?.scorer ?? 'routine',
       rubricVersion: prev?.rubricVersion ?? 'v1',
       status: 'failed',
@@ -202,7 +202,7 @@ export class MemoryStore implements Store {
         jobId: job.id, companyName: job.companyName, position: job.position,
         url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked,
         total: score.total, breakdown: score.breakdown, notifiedAt: score.notifiedAt,
-        summary: summarizeReasoning(score.reasoning),
+        summary: score.summary,
       }))
     const last = rows[rows.length - 1]
     return {

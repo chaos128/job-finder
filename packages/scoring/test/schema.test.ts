@@ -6,6 +6,7 @@ const valid = {
   total: 72,
   breakdown: { stack: 18, role: 16, domain: 14, growth: 12, conditions: 12 },
   reasoning: 'React/TS 주력이 requirements와 겹치고 연차도 맞는다.',
+  summary: 'ACME에서 결제 웹 프론트엔드를 맡는 자리다.',
 }
 
 // 버전을 리터럴로 박으면 올릴 때마다 이 테스트만 고치고 넘어가게 된다.
