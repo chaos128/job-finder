@@ -24,7 +24,11 @@ export default async function Page() {
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">
-      <h1 className="text-2xl font-bold">Job Finder</h1>
+      {/* TopBar가 이미 "Job Finder" 브랜드를 보여준다 — 여기서는 페이지 고유의 제목만 둔다. */}
+      <header className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">채점된 공고</h1>
+        <p className="text-neutral-600">점수 순으로 정렬돼 있다. 최소 점수·북마크·발송 여부로 좁혀볼 수 있다.</p>
+      </header>
       <StatusStrip stats={stats} pendingNotify={pendingCount} now={now} />
       <JobList initialRows={first.rows} initialCursor={first.nextCursor} />
     </main>

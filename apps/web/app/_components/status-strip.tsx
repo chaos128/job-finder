@@ -6,7 +6,13 @@ function Tile({ label, value, caption, warn, warnLabel }: {
   label: string; value: string; caption: string; warn?: boolean; warnLabel?: string
 }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+    // 배지만으로는 라벨을 직접 봐야 눈에 띈다 — 링을 더해 줄 전체를 훑을 때도
+    // 경고 타일이 나머지 셋과 다르다는 게 주변 시야에서 걸리게 한다.
+    <div
+      className={`rounded-xl border bg-white p-5 shadow-sm ${
+        warn ? 'border-amber-300 ring-1 ring-amber-300' : 'border-neutral-200'
+      }`}
+    >
       <div className="flex items-center gap-2">
         <span className="text-xs text-neutral-500">{label}</span>
         {/* 경고는 카드를 물들이는 대신 배지로 — 은은한 카드보다 또렷한 배지가 눈에 띈다. */}
