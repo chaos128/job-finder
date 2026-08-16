@@ -1,6 +1,12 @@
 # 채점 routine 설정
 
-Claude Code scheduled agent(routine)로 매일 **02:00 KST**에 실행한다.
+Claude Code scheduled agent(routine)로 매일 **03:00 KST**(= 18:00 UTC)에 실행한다.
+
+02:00이 아니라 03:00인 이유: Vercel Hobby 플랜의 cron은 **1시간 유동 폭**이 있어
+collect(`0 16 * * *` UTC = KST 01:00)가 실제로는 16:00~17:00 UTC 사이 아무 때나 돈다.
+02:00 KST에 채점을 걸면 collect가 아직 도는 중에 `pending`을 조회해 그날 신규 공고를
+놓치고 하루씩 밀린다. 한 시간을 비워두면 그 유동 폭이 끝난 뒤에 시작하고,
+notify(KST 09:00)까지 6시간이 남아 채점이 늦어도 그날 다이제스트에 실린다.
 
 ## 필요한 값
 
