@@ -172,3 +172,13 @@ export interface UnscoredJob {
   dueTime: string | null
   firstSeenAt: string
 }
+
+/**
+ * 미채점 목록은 상한에서 잘린다. 잘린 건수를 백로그 총량인 것처럼 보여주면
+ * 정확히 상한값(100건)에서 화면이 거짓말을 하므로, 상한과 무관한 총량을 함께 준다.
+ */
+export interface UnscoredJobs {
+  rows: UnscoredJob[]
+  /** limit 적용 전 전체 미채점 건수. rows.length보다 클 수 있다. */
+  total: number
+}

@@ -4,7 +4,7 @@ import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
-  SearchParams, Source, UnscoredJob,
+  SearchParams, Source, UnscoredJobs,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -391,7 +391,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (error) throw new Error(error.message)
     },
 
-    async listUnscoredJobs(limit: number): Promise<UnscoredJob[]> {
+    async listUnscoredJobs(limit: number): Promise<UnscoredJobs> {
       // PostgREST의 `!left` embed에 건 필터는 자식(scores)만 걸러내고 부모(jobs)는
       // 제외하지 않는다 — 조건에 안 맞는 자식이 있어도 부모 행은 scores: null을
       // 단 채 그대로 돌아온다. 운영 DB(168/168 채점 완료 상태)에 직접
@@ -407,16 +407,29 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       // (0001_init.sql)가 이미 같은 문제를 SQL 조건절로 풀어놓은 전례를 따라
       // jobs_unscored 뷰(0005 마이그레이션)를 만들어 SQL에서 판정하게 했다 — 그
       // 뷰가 이미 "미채점" 조건을 걸러 놓으므로 limit()이 진짜 상한이다.
-      const rows = unwrap<UnscoredJobRow[]>(
-        await db.from('jobs_unscored')
-          .select('id, company_name, position, url, due_time, first_seen_at')
-          .order('first_seen_at', { ascending: true })
-          .limit(limit),
-      )
-      return rows.map((r) => ({
-        jobId: r.id, companyName: r.company_name, position: r.position,
-        url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
-      }))
+      //
+      // id 2차 정렬 키가 필요한 이유: first_seen_at은 `default now()`이고 insertJobs는
+      // 한 문장으로 배치 insert한다 — 배치 전체가 같은 값을 받는다(운영 168행의
+      // distinct first_seen_at은 1이다). 정렬 키가 완전히 동률이면 Postgres는 순서를
+      // 약속하지 않으므로 limit N이 임의의 부분집합을 고른다. 실제로 운영에
+      // limit=5와 limit=100을 날려보니 서로 다른 앞부분이 나왔다. 2차 키가 있어야
+      // "상한을 넘으면 잘리는 쪽은 항상 최신 수집분"이라는 말이 성립한다.
+      //
+      // count는 같은 요청에 `count: 'exact'`로 붙인다 — head 질의를 따로 두면
+      // 왕복이 하나 늘고 두 값이 서로 다른 시점을 보게 된다.
+      const res = await db.from('jobs_unscored')
+        .select('id, company_name, position, url, due_time, first_seen_at', { count: 'exact' })
+        .order('first_seen_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(limit)
+      const rows = unwrap<UnscoredJobRow[]>(res)
+      return {
+        rows: rows.map((r) => ({
+          jobId: r.id, companyName: r.company_name, position: r.position,
+          url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
+        })),
+        total: res.count ?? rows.length,
+      }
     },
 
     async getDashboardStats(): Promise<DashboardStats> {

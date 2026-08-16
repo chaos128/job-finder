@@ -3,7 +3,7 @@ import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
-  UnscoredJob,
+  UnscoredJobs,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -12,6 +12,8 @@ const NOTIFY_CANDIDATE_LIMIT = 200
 
 export class MemoryStore implements Store {
   private seq = 0
+  /** insertJobs 호출(=실 스토어의 한 배치) 단위로만 증가하는 수집 시각. */
+  private batchSeq = 0
   readonly searches: Search[] = []
   readonly jobs = new Map<string, Job>()
   readonly hits = new Set<string>()
@@ -44,6 +46,12 @@ export class MemoryStore implements Store {
 
   async insertJobs(rows: NewJob[]) {
     const created: Job[] = []
+    // 실 스토어의 first_seen_at은 `default now()`이고 insertJobs는 한 문장으로
+    // 배치 insert한다 — now()는 트랜잭션 시각이라 **배치 전체가 같은 값**을 받는다
+    // (운영 168행의 distinct first_seen_at이 1인 이유). 행마다 증가시키면 실 스토어에
+    // 없는 순서 보장이 생겨, 계약 테스트가 없는 보장을 증명하게 된다. 호출(=배치)이
+    // 바뀔 때만 증가시켜 실 스토어와 같은 모양을 만든다.
+    const firstSeenAt = new Date(++this.batchSeq * 1000).toISOString()
     for (const row of rows) {
       const exists = [...this.jobs.values()].some(
         (j) => j.source === row.source && j.externalId === row.externalId,
@@ -53,10 +61,7 @@ export class MemoryStore implements Store {
       const job: Job = {
         ...row,
         id,
-        // 실 스토어처럼 삽입 순서대로 단조 증가해야 한다 — 전부 같은 값(과거엔
-        // epoch 고정)이면 listUnscoredJobs의 first_seen_at asc 정렬을 계약
-        // 테스트가 검증할 수 없다. seq는 nextId가 이미 증가시켜 놓았다.
-        firstSeenAt: new Date(this.seq * 1000).toISOString(),
+        firstSeenAt,
         detailStatus: 'pending',
         detailAttempts: 0,
         detailError: null,
@@ -228,15 +233,19 @@ export class MemoryStore implements Store {
     if (job) this.jobs.set(jobId, { ...job, bookmarked })
   }
 
-  async listUnscoredJobs(limit: number): Promise<UnscoredJob[]> {
-    return [...this.jobs.values()]
+  async listUnscoredJobs(limit: number): Promise<UnscoredJobs> {
+    const matched = [...this.jobs.values()]
       .filter((job) => !job.hidden && this.scores.get(job.id)?.status !== 'ok')
-      .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt))
-      .slice(0, limit)
-      .map((job) => ({
+      // SupabaseStore와 같은 정렬 규칙 — 한 배치는 first_seen_at이 전부 같으므로
+      // id를 2차 키로 써야 limit이 달라져도 같은 앞부분이 나온다.
+      .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt) || a.id.localeCompare(b.id))
+    return {
+      rows: matched.slice(0, limit).map((job) => ({
         jobId: job.id, companyName: job.companyName, position: job.position,
         url: job.url, dueTime: job.dueTime, firstSeenAt: job.firstSeenAt,
-      }))
+      })),
+      total: matched.length,
+    }
   }
 
   async getDashboardStats(): Promise<DashboardStats> {

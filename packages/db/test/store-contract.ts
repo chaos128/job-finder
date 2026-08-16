@@ -342,8 +342,9 @@ export function describeStoreContract(
         breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
         reasoning: 'r', summary: 's', scorer: 'routine', rubricVersion: 'v5',
       })
-      const rows = await store.listUnscoredJobs(10)
-      expect(rows.map((r) => r.companyName)).toHaveLength(2)
+      const { rows, total } = await store.listUnscoredJobs(10)
+      expect(rows).toHaveLength(2)
+      expect(total).toBe(2)
       expect(rows.map((r) => r.jobId)).not.toContain(created[0]!.id)
     })
 
@@ -352,17 +353,41 @@ export function describeStoreContract(
     test('채점 실패한 공고도 미채점 목록에 남는다', async () => {
       const [created] = await store.insertJobs([job('1')])
       await store.recordScoreFailure(created!.id, 'schema mismatch')
-      const rows = await store.listUnscoredJobs(10)
+      const { rows } = await store.listUnscoredJobs(10)
       expect(rows.map((r) => r.jobId)).toEqual([created!.id])
     })
 
-    // toHaveLength(2)만 보면 최신 N건이나 무작위 N건, 심지어 일부 유실도 통과한다
-    // — 어떤 job이 남는지(가장 오래된 것부터)까지 확인해야 정렬과 상한을 함께
-    // 검증한 게 된다.
-    test('미채점 목록은 상한을 지키고 오래된 것부터 온다', async () => {
-      const created = await store.insertJobs([job('1'), job('2'), job('3')])
-      const rows = await store.listUnscoredJobs(2)
-      expect(rows.map((r) => r.jobId)).toEqual([created[0]!.id, created[1]!.id])
+    // "오래된 것부터"가 실제로 뜻할 수 있는 것은 **배치 사이의 순서**뿐이다.
+    // first_seen_at은 `default now()`이고 insertJobs는 한 문장이라 한 배치 안의
+    // 행들은 시각이 전부 같다(운영 168행의 distinct first_seen_at = 1). 배치 안의
+    // 순서를 단언하는 테스트는 실 스토어에 없는 보장을 증명하는 셈이 된다.
+    test('미채점 목록은 나중에 수집된 배치를 뒤로 보낸다', async () => {
+      const older = await store.insertJobs([job('1'), job('2')])
+      const newer = await store.insertJobs([job('3')])
+      const { rows } = await store.listUnscoredJobs(10)
+      expect(rows).toHaveLength(3)
+      expect(rows[2]!.jobId).toBe(newer[0]!.id)
+      expect(new Set(rows.slice(0, 2).map((r) => r.jobId)))
+        .toEqual(new Set(older.map((j) => j.id)))
+    })
+
+    // 정렬 키가 동률이면 limit N은 임의의 부분집합을 고른다 — 운영에서 limit=5와
+    // limit=100이 실제로 다른 앞부분을 냈다. 2차 정렬 키(id)가 그걸 막는지,
+    // 즉 상한을 줄여도 같은 앞부분이 나오는지 본다.
+    test('상한이 달라져도 같은 앞부분이 온다', async () => {
+      await store.insertJobs([job('1'), job('2'), job('3'), job('4')])
+      const all = await store.listUnscoredJobs(10)
+      const head = await store.listUnscoredJobs(2)
+      expect(head.rows.map((r) => r.jobId)).toEqual(all.rows.slice(0, 2).map((r) => r.jobId))
+    })
+
+    // 상한에서 잘린 건수를 백로그 총량으로 보여주면 화면이 정확히 상한값에서
+    // 거짓말을 한다 — total은 limit과 무관해야 한다.
+    test('미채점 총량은 상한과 무관하게 전체 건수를 준다', async () => {
+      await store.insertJobs([job('1'), job('2'), job('3')])
+      const { rows, total } = await store.listUnscoredJobs(2)
+      expect(rows).toHaveLength(2)
+      expect(total).toBe(3)
     })
   })
 }
