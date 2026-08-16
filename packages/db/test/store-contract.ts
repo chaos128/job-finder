@@ -228,5 +228,16 @@ export function describeStoreContract(
       const unnotified = await store.listDashboardJobs({ limit: 10, unnotifiedOnly: true })
       expect(unnotified.rows.map((r) => r.total)).toEqual([50])
     })
+
+    // status 필터를 빠뜨려도 위 테스트들은 다 통과한다 — 실패한 채점은 애초에
+    // total을 남기지 않아서다. 채점 실패 job이 total 0짜리 가짜 행으로
+    // 새어 나오지 않는지는 별도로 확인해야 한다.
+    test('점수 저장에 실패한 job은 목록에 나타나지 않는다', async () => {
+      const [scored] = await seedScored(store, [{ ext: '1', total: 90 }])
+      const [failed] = await store.insertJobs([job('2')])
+      await store.recordScoreFailure(failed!.id, 'boom')
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows.map((r) => r.jobId)).toEqual([scored!.id])
+    })
   })
 }

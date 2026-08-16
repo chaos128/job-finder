@@ -330,7 +330,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
       if (params.unnotifiedOnly) q = q.is('notified_at', null)
       if (params.cursor) {
-        // keyset: (total, job_id) < (cursor.total, cursor.jobId)
+        // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
         q = q.or(`total.lt.${params.cursor.total},and(total.eq.${params.cursor.total},job_id.lt.${params.cursor.jobId})`)
       }
       const raw = unwrap<DashboardJoinRow[]>(await q)
