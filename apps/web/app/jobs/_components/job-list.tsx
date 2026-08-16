@@ -1,7 +1,7 @@
 'use client'
 
 import type { DashboardCursor, DashboardFilters, DashboardRow } from '@job-finder/db'
-import { Badge, Button, Input } from '@job-finder/ui'
+import { Badge, Button, cn, Input } from '@job-finder/ui'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { loadMoreJobs, toggleBookmark } from '../actions'
 import { JobCard } from './job-card'
@@ -79,33 +79,49 @@ export function JobList({ initialRows, initialCursor }: {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-neutral-600">
           최소 점수
           <Input
             type="number" min={0} max={100} step={5}
-            className="w-20"
+            className="h-9 w-20 rounded-full text-center"
             value={filters.minScore ?? ''}
             onChange={(e) => setFilters((f) => ({
               ...f, minScore: e.target.value === '' ? undefined : Number(e.target.value),
             }))}
           />
         </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={!!filters.bookmarkedOnly}
-            onChange={(e) => setFilters((f) => ({ ...f, bookmarkedOnly: e.target.checked }))} />
+        <button
+          type="button"
+          aria-pressed={!!filters.bookmarkedOnly}
+          onClick={() => setFilters((f) => ({ ...f, bookmarkedOnly: !f.bookmarkedOnly }))}
+          className={cn(
+            'h-9 rounded-full border px-4 font-medium transition-colors',
+            filters.bookmarkedOnly
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+          )}
+        >
           북마크만
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={!!filters.unnotifiedOnly}
-            onChange={(e) => setFilters((f) => ({ ...f, unnotifiedOnly: e.target.checked }))} />
+        </button>
+        <button
+          type="button"
+          aria-pressed={!!filters.unnotifiedOnly}
+          onClick={() => setFilters((f) => ({ ...f, unnotifiedOnly: !f.unnotifiedOnly }))}
+          className={cn(
+            'h-9 rounded-full border px-4 font-medium transition-colors',
+            filters.unnotifiedOnly
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+          )}
+        >
           미발송만
-        </label>
-        <Badge>{rows.length}건</Badge>
+        </button>
+        <Badge className="ml-auto">{rows.length}건</Badge>
       </div>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">
           {error}
           <Button
             type="button" variant="outline" size="sm" className="ml-3"

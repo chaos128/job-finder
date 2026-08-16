@@ -45,38 +45,42 @@ export default async function Page() {
 
       <section className="space-y-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">어떻게 도는가</h2>
-        <ol className="space-y-6">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="flex gap-5">
-              <span className="w-8 shrink-0 text-2xl font-bold tabular-nums text-neutral-300">{i + 1}</span>
-              <div className="space-y-1">
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-lg font-semibold">{s.title}</h3>
-                  <span className="text-xs text-neutral-400">{s.when}</span>
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <ol className="space-y-6">
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="flex gap-5">
+                <span className="w-8 shrink-0 text-2xl font-bold tabular-nums text-neutral-300">{i + 1}</span>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-3">
+                    <h3 className="text-lg font-semibold">{s.title}</h3>
+                    <span className="text-xs text-neutral-400">{s.when}</span>
+                  </div>
+                  <p className="leading-relaxed text-neutral-600">{s.body}</p>
                 </div>
-                <p className="leading-relaxed text-neutral-600">{s.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
       <section className="space-y-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           무엇으로 채점하는가
         </h2>
-        <p className="text-neutral-600">다섯 축에 각각 0~20점, 합쳐서 100점 만점이다.</p>
-        <dl className="space-y-4">
-          {AXES.map(([key, label, desc]) => (
-            <div key={key} className="flex gap-4">
-              <dt className="w-28 shrink-0">
-                <div className="font-medium">{label}</div>
-                <div className="text-xs text-neutral-400">{key}</div>
-              </dt>
-              <dd className="leading-relaxed text-neutral-600">{desc}</dd>
-            </div>
-          ))}
-        </dl>
+        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <p className="text-neutral-600">다섯 축에 각각 0~20점, 합쳐서 100점 만점이다.</p>
+          <dl className="mt-4 space-y-4">
+            {AXES.map(([key, label, desc]) => (
+              <div key={key} className="flex gap-4">
+                <dt className="w-28 shrink-0">
+                  <div className="font-medium">{label}</div>
+                  <div className="text-xs text-neutral-400">{key}</div>
+                </dt>
+                <dd className="leading-relaxed text-neutral-600">{desc}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </section>
 
       <footer className="border-t border-neutral-200 pt-8 text-sm text-neutral-400">

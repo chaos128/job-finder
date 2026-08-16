@@ -29,15 +29,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <div className="text-sm text-neutral-500">{job.companyName}</div>
         <h1 className="text-2xl font-bold">{job.position}</h1>
         <div className="flex items-center gap-4 pt-2">
-          <span className="text-4xl font-bold tabular-nums">{score.total}</span>
+          {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums) */}
+          <span className="text-3xl font-semibold tabular-nums">{score.total}</span>
           <a href={job.url} target="_blank" rel="noreferrer"
-            className="rounded border px-3 py-1 text-sm hover:bg-neutral-100">
+            className="rounded-full border border-neutral-300 px-4 py-1.5 text-sm hover:bg-neutral-100">
             원티드에서 보기
           </a>
         </div>
       </header>
 
-      <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+      <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
         <ScoreBars breakdown={score.breakdown} />
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{score.reasoning}</p>
         <div className="text-xs text-neutral-400">

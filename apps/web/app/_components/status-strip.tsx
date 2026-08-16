@@ -1,11 +1,19 @@
 import type { DashboardStats } from '@job-finder/db'
+import { Badge } from '@job-finder/ui'
 import { formatRelativeTime, isScoringStale } from '@/lib/dashboard'
 
-function Card({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function Tile({ label, value, caption, warn, warnLabel }: {
+  label: string; value: string; caption: string; warn?: boolean; warnLabel?: string
+}) {
   return (
-    <div className={`rounded-lg border p-4 ${warn ? 'border-amber-400 bg-amber-50' : 'border-neutral-200 bg-white'}`}>
-      <div className="text-xs text-neutral-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${warn ? 'text-amber-900' : ''}`}>{value}</div>
+    <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-neutral-500">{label}</span>
+        {/* 경고는 카드를 물들이는 대신 배지로 — 은은한 카드보다 또렷한 배지가 눈에 띈다. */}
+        {warn && <Badge variant="warn">{warnLabel}</Badge>}
+      </div>
+      <div className="mt-2 text-3xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-xs text-neutral-400">{caption}</div>
     </div>
   )
 }
@@ -15,21 +23,34 @@ export function StatusStrip({ stats, pendingNotify, now }: {
   stats: DashboardStats; pendingNotify?: number; now: Date
 }) {
   const versions = Object.entries(stats.rubricVersions)
+  const stale = isScoringStale(stats.lastScoredAt, now)
+  const mixedRubric = versions.length > 1
+
   return (
     <section className="space-y-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card label="채점 진행" value={`${stats.scoredJobs} / ${stats.totalJobs}`} />
-        <Card
+        <Tile
+          label="채점 진행"
+          value={`${stats.scoredJobs} / ${stats.totalJobs}`}
+          caption="전체 공고 대비"
+        />
+        <Tile
           label="마지막 채점"
           value={formatRelativeTime(stats.lastScoredAt, now)}
-          warn={isScoringStale(stats.lastScoredAt, now)}
+          caption="가장 최근 채점 시각"
+          warn={stale}
+          warnLabel="지연"
         />
-        {pendingNotify !== undefined && <Card label="알림 대기" value={`${pendingNotify}건`} />}
-        <Card
+        {pendingNotify !== undefined && (
+          <Tile label="알림 대기" value={`${pendingNotify}건`} caption="발송 예정 공고 수" />
+        )}
+        <Tile
           label="루브릭"
           value={versions.map(([v, n]) => `${v}: ${n}`).join(' · ') || '없음'}
+          caption="적용 중인 채점 기준 버전"
           // 여러 버전이 섞이면 서로 다른 기준으로 매긴 점수가 같은 순위 경쟁을 한다.
-          warn={versions.length > 1}
+          warn={mixedRubric}
+          warnLabel="혼재"
         />
       </div>
       <div className="text-xs text-neutral-500">
