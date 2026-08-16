@@ -27,21 +27,28 @@
 
 **생성**
 
+**컴포넌트 배치 원칙** — feature가 자기 컴포넌트를 소유한다. `app/_components/`에는
+여러 feature가 실제로 함께 쓰는 것만 둔다(현재 `StatusStrip` 하나). 재사용 UI 단위인
+shadcn 컴포넌트는 앱이 아니라 `packages/ui` 워크스페이스에 둔다.
+
 | 경로 | 책임 |
 | --- | --- |
 | `packages/db/migrations/0003_runs_pipeline.sql` | `runs.pipeline` 컬럼 |
-| `apps/web/app/globals.css` | Tailwind 진입점 |
+| `packages/ui/package.json`, `tsconfig.json` | 새 워크스페이스 |
+| `packages/ui/src/cn.ts` | 클래스 병합 헬퍼 |
+| `packages/ui/src/button.tsx` `badge.tsx` `input.tsx` `select.tsx` | shadcn 컴포넌트 |
+| `packages/ui/src/index.ts` | 재노출 |
 | `apps/web/postcss.config.mjs` | Tailwind v4 플러그인 |
-| `apps/web/components.json` | shadcn 설정 |
-| `apps/web/components/ui/*.tsx` | shadcn 컴포넌트 (Table, Badge, Button, Input, Select) |
-| `apps/web/lib/utils.ts` | shadcn `cn()` |
+| `apps/web/app/globals.css` | Tailwind 진입점 + 폰트 변수 |
 | `apps/web/lib/dashboard.ts` | 순수 로직 — 경고 판정, 축 막대 비율, 상대시각 |
-| `apps/web/app/actions.ts` | Server Action — `loadMoreJobs`, `toggleBookmark` |
-| `apps/web/app/_components/status-strip.tsx` | 상태 스트립 (서버) |
-| `apps/web/app/_components/job-list.tsx` | 목록 + 필터 + 무한스크롤 (클라이언트) |
-| `apps/web/app/_components/job-card.tsx` | 공고 카드 한 행 |
-| `apps/web/app/_components/score-bars.tsx` | 축별 막대 |
+| `apps/web/app/_components/status-strip.tsx` | 상태 스트립 — 랜딩·목록 공용 |
 | `apps/web/app/error.tsx` | 조회 실패 표시 |
+| `apps/web/app/page.tsx` | 랜딩 `/` (서버) |
+| `apps/web/app/jobs/page.tsx` | 목록 `/jobs` (서버) |
+| `apps/web/app/jobs/actions.ts` | Server Action — `loadMoreJobs`, `toggleBookmark` |
+| `apps/web/app/jobs/_components/job-list.tsx` | 필터 + 무한스크롤 (클라이언트) |
+| `apps/web/app/jobs/_components/job-card.tsx` | 공고 카드 한 행 |
+| `apps/web/app/jobs/_components/score-bars.tsx` | 축별 막대 (상세가 쓴다) |
 | `apps/web/app/jobs/[id]/page.tsx` | 상세 (서버) |
 | `apps/web/app/jobs/[id]/not-found.tsx` | 없는 공고 |
 | `apps/web/test/dashboard.test.ts` | 순수 로직 테스트 |
@@ -60,7 +67,8 @@
 | `packages/graph/test/discover.test.ts`, `runner.test.ts` | `startRun` 호출 수정 |
 | `apps/web/app/layout.tsx` | `globals.css` import, `noindex` |
 | `apps/web/app/page.tsx` | 대시보드로 교체 |
-| `apps/web/package.json` | Tailwind·shadcn 의존성 |
+| `apps/web/package.json` | Tailwind·Poppins·@job-finder/ui 의존성 |
+| `pnpm-workspace.yaml` | (변경 불필요 — `packages/*` 이미 포함) |
 
 ---
 
@@ -645,21 +653,152 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 4: Tailwind v4 + shadcn 셋업
+## Task 4: `packages/ui` 워크스페이스 + Tailwind v4 + Poppins
 
-`apps/web`에는 CSS 파일조차 없다. 이 태스크의 산출물은 **스타일이 적용된 화면이 실제로 뜨는 것**이다.
+`apps/web`에는 CSS 파일조차 없다. 이 태스크의 산출물은 **`packages/ui`의 버튼이 스타일이 적용된 채로 화면에 뜨는 것**이다.
 
 **Files:**
-- Create: `apps/web/postcss.config.mjs`, `apps/web/app/globals.css`, `apps/web/lib/utils.ts`, `apps/web/components.json`, `apps/web/components/ui/*.tsx`
-- Modify: `apps/web/package.json`, `apps/web/app/layout.tsx`, `apps/web/app/page.tsx`
+- Create: `packages/ui/package.json`, `packages/ui/tsconfig.json`, `packages/ui/src/cn.ts`, `packages/ui/src/button.tsx`, `packages/ui/src/badge.tsx`, `packages/ui/src/input.tsx`, `packages/ui/src/index.ts`, `apps/web/postcss.config.mjs`, `apps/web/app/globals.css`
+- Modify: `apps/web/package.json`, `apps/web/app/layout.tsx`, `apps/web/app/page.tsx`, `apps/web/next.config.ts`
 
-- [ ] **Step 1: Tailwind v4 설치**
+**Interfaces:**
+- Produces: `@job-finder/ui`에서 `cn`, `Button`, `Badge`, `Input`
+
+- [ ] **Step 1: 워크스페이스 뼈대**
+
+`packages/ui/package.json`:
+
+```json
+{
+  "name": "@job-finder/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.0"
+  },
+  "peerDependencies": { "react": "^19.0.0" },
+  "devDependencies": { "@types/react": "^19.0.0" }
+}
+```
+
+`packages/ui/tsconfig.json` — 다른 패키지의 것을 그대로 따라 쓰되 JSX를 켠다:
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "jsx": "react-jsx" },
+  "include": ["src"]
+}
+```
+
+기존 패키지의 `tsconfig.json`을 먼저 열어보고 `extends` 경로와 옵션을 맞춰라.
+
+- [ ] **Step 2: 설치**
 
 ```bash
+pnpm --filter @job-finder/ui install
+pnpm --filter @job-finder/web add @job-finder/ui@workspace:*
 pnpm --filter @job-finder/web add -D tailwindcss @tailwindcss/postcss postcss
 ```
 
-- [ ] **Step 2: PostCSS 설정**
+- [ ] **Step 3: `cn`과 컴포넌트**
+
+`packages/ui/src/cn.ts`:
+
+```ts
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+/** 나중에 준 클래스가 이기도록 병합한다 — 호출부에서 기본 스타일을 덮어쓸 수 있어야 한다. */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+```
+
+`packages/ui/src/button.tsx`:
+
+```tsx
+import { cva, type VariantProps } from 'class-variance-authority'
+import type { ButtonHTMLAttributes } from 'react'
+import { cn } from './cn.js'
+
+const button = cva(
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50',
+  {
+    variants: {
+      variant: {
+        default: 'bg-neutral-900 text-white hover:bg-neutral-700',
+        outline: 'border border-neutral-300 bg-white hover:bg-neutral-100',
+        ghost: 'hover:bg-neutral-100',
+      },
+      size: { default: 'h-9 px-4', sm: 'h-8 px-3 text-xs' },
+    },
+    defaultVariants: { variant: 'default', size: 'default' },
+  },
+)
+
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof button>
+
+export function Button({ className, variant, size, ...props }: ButtonProps) {
+  return <button className={cn(button({ variant, size }), className)} {...props} />
+}
+```
+
+`packages/ui/src/badge.tsx`:
+
+```tsx
+import type { HTMLAttributes } from 'react'
+import { cn } from './cn.js'
+
+export function Badge({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+```
+
+`packages/ui/src/input.tsx`:
+
+```tsx
+import type { InputHTMLAttributes } from 'react'
+import { cn } from './cn.js'
+
+export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      className={cn(
+        'h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-500',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+```
+
+`packages/ui/src/index.ts`:
+
+```ts
+export { cn } from './cn.js'
+export { Button, type ButtonProps } from './button.js'
+export { Badge } from './badge.js'
+export { Input } from './input.js'
+```
+
+**`Select`는 만들지 않는다.** 필터는 숫자 입력 하나와 체크박스 둘이라 셀렉트가 없다. `@radix-ui/react-select`를 들일 이유가 없다.
+
+- [ ] **Step 4: PostCSS와 전역 CSS**
 
 `apps/web/postcss.config.mjs`:
 
@@ -667,85 +806,97 @@ pnpm --filter @job-finder/web add -D tailwindcss @tailwindcss/postcss postcss
 export default { plugins: { '@tailwindcss/postcss': {} } }
 ```
 
-- [ ] **Step 3: 전역 CSS**
-
 `apps/web/app/globals.css`:
 
 ```css
 @import "tailwindcss";
+
+/* Tailwind v4는 워크스페이스 밖 소스를 자동으로 훑지 않는다.
+   packages/ui의 클래스가 빌드에서 누락되지 않도록 명시한다. */
+@source "../../../packages/ui/src";
+
+@theme {
+  /* Poppins에는 한글 글리프가 없다. 화면 대부분이 한국어이므로 실제 적용은
+     숫자·영문·제목이고 한글은 뒤 폴백으로 떨어진다. */
+  --font-sans: var(--font-poppins), Pretendard, -apple-system, system-ui, sans-serif;
+}
 ```
 
-- [ ] **Step 4: layout에 연결하고 색인 차단**
+- [ ] **Step 5: layout — 폰트와 색인 차단**
 
 `apps/web/app/layout.tsx` 전체 교체:
 
 ```tsx
+import { Poppins } from 'next/font/google'
 import './globals.css'
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
+})
 
 export const metadata = {
   title: 'Job Finder',
+  description: 'Wanted 공고를 이력서와 대조 채점해 매일 다이제스트로 보내는 개인용 서비스',
   // 인증이 없는 공개 페이지다. 채점 근거에 경력 정보가 담기므로 색인만은 막는다.
   robots: { index: false, follow: false },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko">
-      <body className="bg-neutral-50 text-neutral-900 antialiased">{children}</body>
+    <html lang="ko" className={poppins.variable}>
+      <body className="bg-neutral-50 font-sans text-neutral-900 antialiased">{children}</body>
     </html>
   )
 }
 ```
 
-- [ ] **Step 5: Tailwind가 실제로 먹는지 확인**
+- [ ] **Step 6: `next.config.ts`에 UI 패키지 추가**
+
+`transpilePackages` 배열에 `'@job-finder/ui'`를 추가한다. 다른 워크스페이스 패키지와 같은 이유다 — TS 소스를 그대로 내보낸다.
+
+- [ ] **Step 7: 실제로 먹는지 확인**
 
 `apps/web/app/page.tsx`를 임시로 교체:
 
 ```tsx
+import { Badge, Button } from '@job-finder/ui'
+
 export default function Page() {
-  return <main className="p-8 text-2xl font-bold text-blue-600">Tailwind 확인</main>
+  return (
+    <main className="space-y-4 p-8">
+      <h1 className="text-3xl font-bold">Job Finder 84</h1>
+      <Button>버튼</Button>
+      <Badge>발송됨</Badge>
+    </main>
+  )
 }
 ```
-
-```bash
-pnpm --filter @job-finder/web build
-```
-
-Expected: 빌드 성공. `pnpm --filter @job-finder/web dev` 후 브라우저에서 파란 굵은 글씨가 보이는지 눈으로 확인한다.
-
-- [ ] **Step 6: shadcn 초기화**
-
-```bash
-cd apps/web && pnpm dlx shadcn@latest init
-```
-
-프롬프트에서 기본값을 택하되 스타일 경로가 `app/globals.css`, alias가 `@/*`인지 확인한다.
-
-**모노레포에서 CLI가 실패하면** 직접 만든다: `apps/web/lib/utils.ts`에 `cn()`을 쓰고(`clsx` + `tailwind-merge`), 필요한 컴포넌트를 shadcn 레지스트리에서 복사해 `apps/web/components/ui/`에 둔다. 어느 경로든 산출물은 같다.
-
-- [ ] **Step 7: 필요한 컴포넌트만 추가**
-
-```bash
-cd apps/web && pnpm dlx shadcn@latest add badge button input select
-```
-
-`Table`은 목록이 카드 레이아웃이라 쓰지 않는다. 추가하지 마라.
-
-- [ ] **Step 8: 빌드와 타입 검사**
 
 ```bash
 pnpm --filter @job-finder/web build && pnpm typecheck
 ```
 
-- [ ] **Step 9: 커밋**
+그다음 dev 서버를 띄우고 **브라우저에서 눈으로 확인한다**:
+- 버튼이 검은 배경 흰 글씨로 보이는가 (`packages/ui` 클래스가 빌드에 포함됐다는 뜻)
+- 숫자 `84`가 Poppins로 보이는가 (한글 "버튼"은 폴백이라 달라 보이는 것이 정상)
+
+버튼이 스타일 없이 나오면 `@source` 경로가 틀린 것이다.
+
+- [ ] **Step 8: 커밋**
 
 ```bash
 git add -A
-git commit -m "chore(web): set up Tailwind v4 and shadcn
+git commit -m "chore: add packages/ui workspace with Tailwind v4 and Poppins
 
-apps/web에 CSS 기반이 없었다. 이후 설정 편집 화면이 예정되어 있어 지금
-깔아두지 않으면 손으로 쓴 CSS를 나중에 다시 쓰게 된다. 실제로 쓰는
-컴포넌트만 가져온다.
+shadcn 컴포넌트를 apps/web이 아니라 packages/ui에 둔다 — 앱이 아니라 재사용
+UI 단위다. 실제로 쓰는 것만 만든다: Button, Badge, Input. 필터에 셀렉트가
+없으므로 Select는 만들지 않는다.
+
+Tailwind v4는 워크스페이스 밖 소스를 자동으로 훑지 않아 @source로 packages/ui를
+명시한다. Poppins에는 한글 글리프가 없어 한글은 폴백으로 떨어진다 — 숫자와
+영문에만 적용된다.
 
 공개 페이지이므로 layout metadata에 noindex를 넣는다.
 
@@ -861,8 +1012,9 @@ function Card({ label, value, warn }: { label: string; value: string; warn?: boo
   )
 }
 
+/** pendingNotify는 랜딩에서 생략한다 — 그 값을 위해 추가 질의를 하지 않는다. */
 export function StatusStrip({ stats, pendingNotify, now }: {
-  stats: DashboardStats; pendingNotify: number; now: Date
+  stats: DashboardStats; pendingNotify?: number; now: Date
 }) {
   const versions = Object.entries(stats.rubricVersions)
   return (
@@ -874,7 +1026,7 @@ export function StatusStrip({ stats, pendingNotify, now }: {
           value={formatRelativeTime(stats.lastScoredAt, now)}
           warn={isScoringStale(stats.lastScoredAt, now)}
         />
-        <Card label="알림 대기" value={`${pendingNotify}건`} />
+        {pendingNotify !== undefined && <Card label="알림 대기" value={`${pendingNotify}건`} />}
         <Card
           label="루브릭"
           value={versions.map(([v, n]) => `${v}: ${n}`).join(' · ') || '없음'}
@@ -912,11 +1064,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 6: 목록 페이지 + 무한스크롤
+## Task 6: `/jobs` 목록 + 무한스크롤
 
 **Files:**
-- Create: `apps/web/app/actions.ts`, `apps/web/app/_components/job-card.tsx`, `apps/web/app/_components/job-list.tsx`, `apps/web/app/error.tsx`
-- Modify: `apps/web/app/page.tsx`
+- Create: `apps/web/app/jobs/actions.ts`, `apps/web/app/jobs/_components/job-card.tsx`, `apps/web/app/jobs/_components/job-list.tsx`, `apps/web/app/jobs/page.tsx`, `apps/web/app/error.tsx`
 
 **Interfaces:**
 - Consumes: Task 2 `listDashboardJobs`, Task 3 `getDashboardStats`/`setJobBookmarked`, Task 5 `<StatusStrip>`
@@ -924,7 +1075,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Server Action 작성**
 
-`apps/web/app/actions.ts`:
+`apps/web/app/jobs/actions.ts`:
 
 ```ts
 'use server'
@@ -954,7 +1105,7 @@ export async function toggleBookmark(jobId: string, next: boolean): Promise<void
 
 - [ ] **Step 2: 카드 컴포넌트**
 
-`apps/web/app/_components/job-card.tsx`:
+`apps/web/app/jobs/_components/job-card.tsx`:
 
 ```tsx
 import type { DashboardRow } from '@job-finder/db'
@@ -997,7 +1148,7 @@ export function JobCard({ row, onToggleBookmark }: {
 
 - [ ] **Step 3: 목록 클라이언트 컴포넌트**
 
-`apps/web/app/_components/job-list.tsx`:
+`apps/web/app/jobs/_components/job-list.tsx`:
 
 ```tsx
 'use client'
@@ -1117,15 +1268,15 @@ export function JobList({ initialRows, initialCursor }: {
 
 **경쟁 상태 주의:** 필터를 빠르게 연달아 바꾸면 늦게 시작한 요청이 먼저 도착할 수 있다. `cancelled` 플래그가 그것을 막는다 — 지우지 마라.
 
-- [ ] **Step 4: 페이지 교체**
+- [ ] **Step 4: 목록 페이지**
 
-`apps/web/app/page.tsx`:
+`apps/web/app/jobs/page.tsx`:
 
 ```tsx
 import { getStore } from '@/lib/store'
 import { PAGE_SIZE } from './actions'
 import { JobList } from './_components/job-list'
-import { StatusStrip } from './_components/status-strip'
+import { StatusStrip } from '../_components/status-strip'
 
 export const dynamic = 'force-dynamic'
 
@@ -1177,7 +1328,7 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
 pnpm --filter @job-finder/web build && pnpm typecheck && pnpm test
 ```
 
-그다음 `.env.local`을 export한 채 dev 서버를 띄우고 **브라우저에서 직접 확인한다**:
+그다음 `.env.local`을 export한 채 dev 서버를 띄우고 **브라우저에서 `/jobs`를 직접 확인한다**:
 - 상태 스트립에 `168 / 168`이 뜨는가
 - 카드가 점수 내림차순인가
 - 스크롤을 내리면 추가 로드되는가
@@ -1205,14 +1356,14 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 7: 상세 페이지
 
 **Files:**
-- Create: `apps/web/app/jobs/[id]/page.tsx`, `apps/web/app/jobs/[id]/not-found.tsx`, `apps/web/app/_components/score-bars.tsx`
+- Create: `apps/web/app/jobs/[id]/page.tsx`, `apps/web/app/jobs/[id]/not-found.tsx`, `apps/web/app/jobs/_components/score-bars.tsx`
 
 **Interfaces:**
 - Consumes: Task 3 `getJobDetail`, Task 5 `axisPercent`
 
 - [ ] **Step 1: 축 막대 컴포넌트**
 
-`apps/web/app/_components/score-bars.tsx`:
+`apps/web/app/jobs/_components/score-bars.tsx`:
 
 ```tsx
 import { axisPercent } from '@/lib/dashboard'
@@ -1252,7 +1403,7 @@ export function ScoreBars({ breakdown }: { breakdown: Record<string, number> }) 
 import { getStore } from '@/lib/store'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ScoreBars } from '../../_components/score-bars'
+import { ScoreBars } from '../_components/score-bars'
 
 export const dynamic = 'force-dynamic'
 
@@ -1358,7 +1509,137 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 8: 배포와 실데이터 검증
+## Task 8: `/` 랜딩 페이지
+
+`/`는 이 서비스가 무엇인지 설명한다. 목록은 `/jobs`로 옮겨졌으므로 `/`는 비어 있다.
+
+**Files:**
+- Modify: `apps/web/app/page.tsx` (Task 4에서 임시로 넣은 확인용 코드를 교체)
+
+**Interfaces:**
+- Consumes: Task 3 `getDashboardStats`, Task 5 `<StatusStrip>`
+
+- [ ] **Step 1: 랜딩 페이지 작성**
+
+`apps/web/app/page.tsx` 전체 교체:
+
+```tsx
+import { getStore } from '@/lib/store'
+import Link from 'next/link'
+import { StatusStrip } from './_components/status-strip'
+
+export const dynamic = 'force-dynamic'
+
+const STEPS = [
+  { when: 'KST 01:00', title: '수집', body: '등록된 검색 조건으로 Wanted를 훑어 새로 올라온 공고만 저장한다. 이미 아는 공고는 건너뛴다.' },
+  { when: 'KST 03:00', title: '채점', body: '이력서 프로필과 대조해 5개 축으로 0~100점을 매긴다. 채점은 이 앱이 아니라 외부 Claude Code routine이 한다.' },
+  { when: 'KST 09:00', title: '알림', body: '기준을 넘긴 공고를 점수 순으로 골라 다이제스트 메일 한 통으로 보낸다.' },
+]
+
+const AXES = [
+  ['stack', '기술 스택', '요구 스택이 주력과 얼마나 겹치는가'],
+  ['role', '역할·연차', '이 팀이 찾는 연차와 책임 범위가 맞는가'],
+  ['domain', '도메인', '해봤고 잘하는 분야인가'],
+  ['growth', '회사 성장성', '매출·사용자·투자에 성장 신호가 있는가'],
+  ['conditions', '근무 조건', '위치·근무 형태가 선호와 맞는가'],
+] as const
+
+export default async function Page() {
+  const stats = await getStore().getDashboardStats()
+
+  return (
+    <main className="mx-auto max-w-3xl space-y-16 px-6 py-20">
+      <header className="space-y-6">
+        <h1 className="text-5xl font-bold tracking-tight">Job Finder</h1>
+        <p className="text-xl leading-relaxed text-neutral-600">
+          Wanted 채용 공고를 매일 훑어 이력서와 대조 채점하고,
+          <br />
+          좋은 매치가 나오면 아침에 메일 한 통으로 알려준다.
+        </p>
+        <Link
+          href="/jobs"
+          className="inline-block rounded-md bg-neutral-900 px-6 py-3 text-white hover:bg-neutral-700"
+        >
+          채점된 공고 보기 →
+        </Link>
+      </header>
+
+      <section className="space-y-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">지금 상태</h2>
+        <StatusStrip stats={stats} now={new Date()} />
+      </section>
+
+      <section className="space-y-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">어떻게 도는가</h2>
+        <ol className="space-y-6">
+          {STEPS.map((s, i) => (
+            <li key={s.title} className="flex gap-5">
+              <span className="w-8 shrink-0 text-2xl font-bold tabular-nums text-neutral-300">{i + 1}</span>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-lg font-semibold">{s.title}</h3>
+                  <span className="text-xs text-neutral-400">{s.when}</span>
+                </div>
+                <p className="leading-relaxed text-neutral-600">{s.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="space-y-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+          무엇으로 채점하는가
+        </h2>
+        <p className="text-neutral-600">다섯 축에 각각 0~20점, 합쳐서 100점 만점이다.</p>
+        <dl className="space-y-4">
+          {AXES.map(([key, label, desc]) => (
+            <div key={key} className="flex gap-4">
+              <dt className="w-28 shrink-0">
+                <div className="font-medium">{label}</div>
+                <div className="text-xs text-neutral-400">{key}</div>
+              </dt>
+              <dd className="leading-relaxed text-neutral-600">{desc}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <footer className="border-t border-neutral-200 pt-8 text-sm text-neutral-400">
+        개인용 서비스입니다. 채점 기준은 소유자의 이력서와 선호 조건에 맞춰져 있습니다.
+      </footer>
+    </main>
+  )
+}
+```
+
+- [ ] **Step 2: 빌드하고 확인**
+
+```bash
+pnpm --filter @job-finder/web build && pnpm typecheck && pnpm test
+```
+
+dev 서버에서 확인한다:
+- `/`에 설명과 3단계, 5축이 보이는가
+- 상태 스트립에 실제 값이 뜨는가 (알림 대기 카드는 없어야 정상)
+- "채점된 공고 보기" 링크가 `/jobs`로 가는가
+- 큰 제목 `Job Finder`가 Poppins로 보이는가
+
+- [ ] **Step 3: 커밋**
+
+```bash
+git add -A
+git commit -m "feat(web): add landing page
+
+목록이 /jobs로 옮겨져 /가 비었다. 이 서비스가 무엇을 하고 어떤 기준으로
+채점하는지 설명하고, 현재 상태를 함께 보여준다.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 9: 배포와 실데이터 검증
 
 **Files:** 없음 (검증과 문서만)
 
@@ -1393,8 +1674,15 @@ curl -s -o /dev/null -w "%{http_code}\n" https://jobsonar.vercel.app/
 curl -s https://jobsonar.vercel.app/ | grep -c "noindex"
 ```
 
-브라우저에서 `https://jobsonar.vercel.app/`를 열어 확인한다:
-- 상태 스트립 4개 카드에 실제 값 (`168 / 168`, 마지막 채점 시각, 알림 대기, `v3: 168`)
+브라우저에서 확인한다:
+
+`https://jobsonar.vercel.app/` — 랜딩
+- 서비스 설명, 3단계 흐름, 5축 설명이 보임
+- 상태 스트립에 실제 값 (`168 / 168`, 마지막 채점 시각, `v3: 168`)
+- "채점된 공고 보기"가 `/jobs`로 이동
+
+`https://jobsonar.vercel.app/jobs` — 목록
+- 상태 스트립에 알림 대기 카드까지 4개
 - 카드 목록이 점수 내림차순, 최상단이 84점 아이벡스
 - 스크롤 시 추가 로드
 - 카드를 눌러 상세로, 공고 본문이 보임
@@ -1430,8 +1718,10 @@ git push origin main
 
 ## 자체 검토 결과
 
-**스펙 커버리지** — §3.1 상태 스트립 → Task 5, 공고 카드·필터 → Task 6, §3.2 상세 → Task 7, §4 데이터 흐름 → Task 6, §5 커서 → Task 2, §6 Store 4개 → Task 2·3, §7 마이그레이션 → Task 1·8, §8 UI 기반 → Task 4, §9 noindex → Task 4 Step 4, §10 에러 처리 → Task 6 Step 5·Task 7 Step 3, §11 테스트 → Task 2·3·5. 누락 없음.
+**스펙 커버리지** — §3.1 랜딩 → Task 8, §3.2 상태 스트립 → Task 5 / 공고 카드·필터 → Task 6, §3.3 상세 → Task 7, §4 데이터 흐름 → Task 6, §5 커서 → Task 2, §6 Store 4개 → Task 2·3, §7 마이그레이션 → Task 1·9, §8 UI 기반(packages/ui·Poppins) → Task 4, §9 noindex → Task 4 Step 5, §10 에러 처리 → Task 6 Step 5·Task 7 Step 3, §11 테스트 → Task 2·3·5. 누락 없음.
 
 **타입 일관성** — `DashboardRow`·`DashboardCursor`·`DashboardPage`·`DashboardFilters`(Task 2), `RunSummary`·`DashboardStats`(Task 3), `RunPipeline`(Task 1)이 이후 태스크에서 같은 이름으로 쓰인다. `getJobDetail`은 새 타입 대신 기존 `ScoredJob`을 반환한다.
+
+**컴포넌트 배치** — `packages/ui`(shadcn), `app/_components/`(StatusStrip — 랜딩·목록 공용), `app/jobs/_components/`(job-list·job-card·score-bars). feature 밖에서 feature 내부를 import하는 곳이 없다.
 
 **알려진 순서 의존** — Task 2 Step 2의 필터 테스트는 `setJobBookmarked`(Task 3)를 쓰므로, Task 2에서는 북마크 부분을 빼고 Task 3 Step 2에서 되돌린다. 각 태스크 본문에 명시했다.

@@ -31,7 +31,25 @@ Plan 1(수집·채점·알림 파이프라인)은 배포되어 동작 중이다.
 
 ## 3. 화면
 
-### 3.1 목록 `/`
+라우트는 셋이다. `/`는 서비스를 설명하는 랜딩, `/jobs`는 목록, `/jobs/[id]`는 상세다.
+
+**목록을 `/`가 아니라 `/jobs`에 두는 이유**는 컴포넌트 배치 때문이다. 목록
+컴포넌트를 `app/jobs/` 안에 두고 `/`가 그것을 import하면 feature 밖에서 feature
+내부를 꺼내 쓰게 된다. 라우트를 나누면 각 feature가 자기 컴포넌트를 소유한다.
+
+### 3.1 랜딩 `/`
+
+이 서비스가 무엇을 하는지 설명한다. 방문자가 이 화면만 보고도 파악할 수 있어야 한다.
+
+- 무엇을 하는 서비스인가 — Wanted 공고를 이력서와 대조 채점해 매일 다이제스트로 보낸다
+- 어떻게 도는가 — 수집(KST 01:00) → 채점 → 알림(KST 09:00)의 3단계
+- 무엇으로 채점하는가 — 5개 축(stack·role·domain·growth·conditions) 각 0~20점
+- 지금 상태 — 상태 스트립(§3.2의 상태 스트립과 같은 컴포넌트)
+- `/jobs`로 가는 링크
+
+상태 스트립을 여기에도 두므로 **`app/_components/`에 두는 진짜 공유 컴포넌트**가 된다.
+
+### 3.2 목록 `/jobs`
 
 상단 상태 스트립, 하단 공고 카드 목록.
 
@@ -61,7 +79,7 @@ Plan 1(수집·채점·알림 파이프라인)은 배포되어 동작 중이다.
 
 `hidden = true`인 공고는 항상 제외한다.
 
-### 3.2 상세 `/jobs/[id]`
+### 3.3 상세 `/jobs/[id]`
 
 공고 하나를 판단하는 데 필요한 것을 전부 담는다. Wanted 상세 응답을 이미
 저장하고 있으므로(`intro`, `requirements`, `main_tasks`, `preferred_points`,
@@ -77,12 +95,23 @@ Plan 1(수집·채점·알림 파이프라인)은 배포되어 동작 중이다.
 ## 4. 데이터 흐름
 
 ```
-app/page.tsx           서버 컴포넌트 — 첫 페이지 + 통계 조회
- ├─ <StatusStrip>      서버 컴포넌트, 순수 렌더
- └─ <JobList>          클라이언트 — 필터 상태, 무한스크롤, 북마크
-app/jobs/[id]/page.tsx 서버 컴포넌트 — 상세 전체
-app/actions.ts         Server Action — loadMoreJobs, toggleBookmark
+packages/ui/                    shadcn 컴포넌트 + cn(). 앱에 종속되지 않는다.
+
+apps/web/app/
+  _components/status-strip.tsx  랜딩과 목록이 함께 쓴다 → 진짜 공유
+  page.tsx                      랜딩 (서버) — 설명 + 상태
+  jobs/
+    page.tsx                    목록 (서버) — 첫 페이지 + 통계
+    actions.ts                  Server Action — loadMoreJobs, toggleBookmark
+    _components/job-list.tsx    클라이언트 — 필터·무한스크롤·북마크
+    _components/job-card.tsx
+    _components/score-bars.tsx  목록은 안 쓰지만 상세가 쓴다 (같은 feature)
+    [id]/page.tsx               상세 (서버)
 ```
+
+**feature가 자기 컴포넌트를 소유한다.** `app/_components/`에는 여러 feature가
+실제로 함께 쓰는 것만 둔다 — 현재는 `StatusStrip` 하나다. Server Action도
+`jobs` feature 안에 둔다. 목록 외에는 쓰지 않는다.
 
 **서버가 I/O, 클라이언트가 상호작용.** service role 키는 서버에만 있고
 브라우저로 내려가지 않는다. 페이지가 공개이므로(§9) 이 경계가 유일한 방어선이다.
@@ -159,11 +188,28 @@ Store 포트, 두 구현, 계약 테스트, `runCollect`·`runNotify`가 함께 
 
 Tailwind v4 + shadcn/ui. 현재 `apps/web`에는 CSS 파일조차 없다.
 
-가져오는 컴포넌트는 실제로 쓰는 것만: `Table`, `Badge`, `Button`, `Input`,
-`Select`. 펼치기가 없어졌으므로 `Collapsible`도 필요 없다.
+**shadcn 컴포넌트는 `packages/ui` 워크스페이스에 둔다.** 앱이 아니라 재사용
+단위이므로 `apps/web` 안에 두지 않는다. 가져오는 것은 실제로 쓰는 것만:
+`Button`, `Badge`, `Input`, `Select`. 목록이 카드 레이아웃이라 `Table`은 쓰지
+않고, 펼치기가 없어졌으므로 `Collapsible`도 필요 없다.
 
 처음 스택으로 shadcn을 지정했고, 이후 설정 편집 화면이 예정되어 있다. 지금
 손으로 CSS를 쓰면 그때 다시 쓰게 된다.
+
+### 폰트 — Poppins
+
+`next/font/google`로 Poppins를 불러 기본 sans로 쓴다.
+
+**Poppins에는 한글 글리프가 없다.** 화면 텍스트 대부분이 한국어이므로 실제
+적용 범위는 숫자·영문·제목이고, 한글은 폴백으로 떨어진다. 그래서 폰트 스택에
+한글 폴백을 명시한다:
+
+```
+Poppins → Pretendard → -apple-system → system-ui → sans-serif
+```
+
+점수(`84`), 진행 표시(`168 / 168`), 축 점수 같은 숫자에 가장 크게 드러난다.
+숫자 정렬이 흔들리지 않도록 이 자리에는 `tabular-nums`를 함께 쓴다.
 
 ## 9. 인증 — 없음
 
