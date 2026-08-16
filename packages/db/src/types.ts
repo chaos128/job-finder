@@ -124,6 +124,17 @@ export interface DashboardRow {
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null
+  /**
+   * reasoning의 첫 문장(최대 140자). 전문은 상세에서만 보여준다 —
+   * 168행 기준 전문은 64 KB, 첫 문장만 자르면 20 KB다.
+   */
+  summary: string
+}
+
+/** 한국어 문장은 '다.'로 끝난다. 첫 문장이 없거나 너무 길면 140자에서 자른다. */
+export function summarizeReasoning(reasoning: string): string {
+  const first = reasoning.split(/(?<=다\.)\s/)[0] ?? reasoning
+  return first.length <= 140 ? first : `${first.slice(0, 139)}…`
 }
 
 /**

@@ -321,5 +321,30 @@ export function describeStoreContract(
       const page = await store.listDashboardJobs({ limit: 10 })
       expect(page.rows.map((r) => r.jobId)).toEqual([scored!.id])
     })
+
+    test('목록은 근거 전문이 아니라 첫 문장만 싣는다', async () => {
+      const [created] = await store.insertJobs([job('1')])
+      await store.saveScore({
+        jobId: created!.id, total: 80,
+        breakdown: { stack: 16, role: 16, domain: 16, growth: 16, conditions: 16 },
+        reasoning: '첫 문장이다. 둘째 문장이다. 셋째 문장이다.',
+        scorer: 'routine', rubricVersion: 'v3',
+      })
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows[0]!.summary).toBe('첫 문장이다.')
+    })
+
+    test('첫 문장이 140자를 넘으면 자르고 말줄임표를 붙인다', async () => {
+      const [created] = await store.insertJobs([job('1')])
+      await store.saveScore({
+        jobId: created!.id, total: 70,
+        breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
+        reasoning: `${'가'.repeat(200)}다.`,
+        scorer: 'routine', rubricVersion: 'v3',
+      })
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows[0]!.summary).toHaveLength(140)
+      expect(page.rows[0]!.summary.endsWith('…')).toBe(true)
+    })
   })
 }

@@ -6,6 +6,7 @@ import type {
   NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source,
 } from './types.js'
+import { summarizeReasoning } from './types.js'
 
 const MAX_ATTEMPTS = 3
 
@@ -27,9 +28,11 @@ const NOTIFY_CANDIDATE_SELECT = `*, jobs(
   detail_status, detail_attempts, detail_error, bookmarked, hidden
 )`
 
-// raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다.
+// raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning은 DB에서는
+// 그대로 가져오고 서버(listDashboardJobs)에서 첫 문장으로 자른다 — PostgREST에
+// left()가 없고, 줄여야 하는 구간은 서버→브라우저이지 DB→서버가 아니다.
 const DASHBOARD_SELECT =
-  'total, breakdown, notified_at, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
+  'total, breakdown, notified_at, reasoning, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
@@ -64,6 +67,7 @@ interface NotificationRow {
 
 type DashboardJoinRow = {
   total: number; breakdown: Record<string, number>; notified_at: string | null
+  reasoning: string
   jobs: {
     id: string; company_name: string; position: string; url: string
     due_time: string | null; bookmarked: boolean; hidden: boolean
@@ -340,6 +344,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
         url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked,
         total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
+        summary: summarizeReasoning(r.reasoning),
       }))
       const last = rows[rows.length - 1]
       return {
