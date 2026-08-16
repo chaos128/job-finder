@@ -17,6 +17,7 @@ export async function loadMoreJobs(
 
 export async function toggleBookmark(jobId: string, next: boolean): Promise<void> {
   await getStore().setJobBookmarked(jobId, next)
-  revalidatePath('/')
+  // 북마크를 보여주는 라우트만 무효화한다 — `/`는 랜딩이라 북마크가 없다.
+  revalidatePath('/jobs')
   revalidatePath(`/jobs/${jobId}`)
 }

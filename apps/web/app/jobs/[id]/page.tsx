@@ -23,7 +23,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 p-6">
-      <Link href="/" className="text-sm text-neutral-500 hover:underline">← 목록</Link>
+      <Link href="/jobs" className="text-sm text-neutral-500 hover:underline">← 목록</Link>
 
       <header className="space-y-1">
         <div className="text-sm text-neutral-500">{job.companyName}</div>

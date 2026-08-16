@@ -35,7 +35,7 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 - 바로 아래 **"Include source files outside of the Root Directory"** 토글이 켜져 있어야
   한다. `packages/*`가 `apps/web` 밖에 있다.
 - Build/Install Command는 기본값을 쓴다. Vercel이 워크스페이스 루트에서 설치해야
-  `workspace:*` 의존성 5개가 풀린다.
+  `workspace:*` 의존성 6개가 풀린다.
 - `vercel.json`은 Root Directory 기준으로 찾으므로 `apps/web/vercel.json`이 맞는 위치다.
 - **Build Command에 `--turbopack`을 붙이지 말 것.** `next.config.ts`의
   `webpack.resolve.extensionAlias`가 ESM `.js`→`.ts` 해석을 푸는데 Turbopack은 이 콜백을
