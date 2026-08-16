@@ -30,6 +30,12 @@ export function JobList({ initialRows, initialCursor }: {
   useEffect(() => {
     if (isFirstRun.current) { isFirstRun.current = false; return }
     const myGeneration = ++generation.current
+    // 응답을 기다렸다 채우지 않고, 요청을 보내기 전에 이전 필터의 페이징 상태를
+    // 먼저 버린다. generation 가드는 "어느 응답이 이긴다"만 정하므로, 이 요청이
+    // 실패하면 cursor가 이전 필터 결과의 마지막 행을 가리킨 채 남는다 — 그 뒤의
+    // 스크롤은 같은 세대라 가드를 통과하고, 새 필터로 낡은 커서를 태워 두 질의의
+    // 결과를 한 목록에 이어붙인다(새로고침 전까지 자가 교정되지 않는다).
+    setRows([]); setCursor(null)
     startTransition(async () => {
       try {
         const page = await loadMoreJobs(filters)
