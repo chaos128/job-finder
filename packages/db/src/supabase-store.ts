@@ -126,6 +126,18 @@ function toScore(row: ScoreRow): Score {
   }
 }
 
+/**
+ * `jobs.id`·`scores.job_id`는 uuid 컬럼이라, PostgREST가 uuid로 캐스팅하지 못하는
+ * 문자열을 받으면 400(22P02)을 내고 unwrap이 throw한다. 대시보드는 인증 없는 공개
+ * 페이지라 오타 URL·크롤러·끊긴 링크가 임의 문자열을 들고 온다 — MemoryStore가
+ * "그런 id는 없다"로 다루는 것과 같게(계약: store-contract.ts의 getJobDetail),
+ * 질의를 보내기 전에 걸러 500 대신 404가 되게 한다.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value)
+}
+
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
   if (res.data === null) throw new Error('unexpected empty response')
@@ -337,7 +349,12 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (params.unnotifiedOnly) q = q.is('notified_at', null)
       if (params.cursor) {
         // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
-        q = q.or(`total.lt.${params.cursor.total},and(total.eq.${params.cursor.total},job_id.lt.${params.cursor.jobId})`)
+        // uuid가 아닌 jobId는 어떤 행과도 동점 비교가 성립하지 않는다 — 캐스팅
+        // 400으로 페이지 전체를 죽이는 대신 동점 항만 뺀다(loadMoreJobs는 검증
+        // 없는 공개 Server Action이라 임의 커서가 들어올 수 있다).
+        q = q.or(isUuid(params.cursor.jobId)
+          ? `total.lt.${params.cursor.total},and(total.eq.${params.cursor.total},job_id.lt.${params.cursor.jobId})`
+          : `total.lt.${params.cursor.total}`)
       }
       const raw = unwrap<DashboardJoinRow[]>(await q)
       const rows = raw.map((r) => ({
@@ -355,6 +372,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     },
 
     async getJobDetail(jobId: string): Promise<ScoredJob | null> {
+      if (!isUuid(jobId)) return null
       const rows = unwrap<(ScoreRow & { jobs: JobRow })[]>(
         await db.from('scores').select('*, jobs(*)').eq('job_id', jobId).limit(1),
       )
@@ -363,6 +381,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     },
 
     async setJobBookmarked(jobId: string, bookmarked: boolean) {
+      if (!isUuid(jobId)) return
       const { error } = await db.from('jobs').update({ bookmarked }).eq('id', jobId)
       if (error) throw new Error(error.message)
     },
