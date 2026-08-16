@@ -339,7 +339,7 @@ export function describeStoreContract(
       await store.saveScore({
         jobId: created!.id, total: 70,
         breakdown: { stack: 14, role: 14, domain: 14, growth: 14, conditions: 14 },
-        reasoning: `${'가'.repeat(200)}다.`,
+        reasoning: `${'가'.repeat(200)}다. 짧다.`,
         scorer: 'routine', rubricVersion: 'v3',
       })
       const page = await store.listDashboardJobs({ limit: 10 })
