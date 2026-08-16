@@ -83,6 +83,13 @@ RLS는 8개 테이블 전부 켜져 있고 **정책은 하나도 없다**(servic
 - **`packages/db/test/supabase-store.test.ts`는 대상 프로젝트의 모든 테이블을 비운다.**
   Supabase 프로젝트가 하나뿐이라 운영 데이터가 날아갈 수 있다. `SUPABASE_TEST_ALLOW_TRUNCATE=1`
   옵트인이 있어야만 돌고, 기본적으로는 skip된다. 지워도 되는 별도 프로젝트에서만 켜라.
+- **`.env.local`은 저장소 루트에 있는데 Next는 `apps/web/`에서 찾는다.** 그래서
+  `apps/web/.env.local`을 루트 파일로 향하는 심링크로 둔다(gitignore 대상이라 각자
+  만들어야 한다). 없으면 `pnpm dev`가 뜨긴 하는데 모든 페이지가
+  `NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 필요합니다`로 500이 난다.
+  ```bash
+  ln -sf ../../.env.local apps/web/.env.local
+  ```
 - **Vercel cron은 UTC**. `apps/web/vercel.json`의 `0 16 * * *` / `0 0 * * *`는 KST 01:00 / 09:00이다.
 - **cron 라우트의 HTTP 상태 코드가 유일한 실패 신호다.** 대시보드가 없다. 건별 실패가
   있거나 설정이 누락되면 5xx를 반환한다(본문은 그대로 유지). 이 규약을 200으로 되돌리면
