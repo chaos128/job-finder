@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-import type { NewJob, Store } from '../src/index.js'
+import type { DashboardCursor, DashboardPage, NewJob, Store } from '../src/index.js'
 
 const job = (externalId: string): NewJob => ({
   source: 'wanted',
@@ -12,6 +12,18 @@ const job = (externalId: string): NewJob => ({
   url: `https://www.wanted.co.kr/wd/${externalId}`,
   dueTime: null,
 })
+
+const seedScored = async (store: Store, specs: { ext: string; total: number }[]) => {
+  const created = await store.insertJobs(specs.map((s) => job(s.ext)))
+  for (const [i, spec] of specs.entries()) {
+    await store.saveScore({
+      jobId: created[i]!.id, total: spec.total,
+      breakdown: { stack: spec.total, role: 0, domain: 0, growth: 0, conditions: 0 },
+      reasoning: `r${spec.ext}`, scorer: 'routine', rubricVersion: 'v3',
+    })
+  }
+  return created
+}
 
 export function describeStoreContract(
   name: string,
@@ -176,6 +188,45 @@ export function describeStoreContract(
       const searchId = seedSearchId ? await seedSearchId(store) : 'search-1'
       await store.linkSearchHits(searchId, [inserted!.id])
       await expect(store.linkSearchHits(searchId, [inserted!.id])).resolves.toBeUndefined()
+    })
+
+    test('listDashboardJobs는 점수 내림차순으로 자르고 커서를 준다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 70 }, { ext: '3', total: 80 },
+      ])
+      const page = await store.listDashboardJobs({ limit: 2 })
+      expect(page.rows.map((r) => r.total)).toEqual([90, 80])
+      expect(page.nextCursor).toEqual({ total: 80, jobId: page.rows[1]!.jobId })
+    })
+
+    // 동점이 페이지 경계에 걸리면 total 단독 커서는 행을 건너뛰거나 중복시킨다.
+    test('동점 경계를 넘어가도 누락도 중복도 없다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 74 }, { ext: '2', total: 74 }, { ext: '3', total: 74 },
+        { ext: '4', total: 74 }, { ext: '5', total: 60 },
+      ])
+      const seen: string[] = []
+      let cursor: DashboardCursor | undefined
+      for (let guard = 0; guard < 10; guard++) {
+        const page: DashboardPage = await store.listDashboardJobs({ limit: 2, cursor })
+        seen.push(...page.rows.map((r) => r.jobId))
+        if (!page.nextCursor) break
+        cursor = page.nextCursor
+      }
+      expect(seen).toHaveLength(5)
+      expect(new Set(seen).size).toBe(5)
+    })
+
+    test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 50 },
+      ])
+      expect((await store.listDashboardJobs({ limit: 10, minScore: 60 })).rows).toHaveLength(1)
+
+      const ntf = await store.createNotification([created[0]!.id])
+      await store.markNotificationSent(ntf.id)
+      const unnotified = await store.listDashboardJobs({ limit: 10, unnotifiedOnly: true })
+      expect(unnotified.rows.map((r) => r.total)).toEqual([50])
     })
   })
 }

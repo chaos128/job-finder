@@ -1,5 +1,6 @@
 import type { Store } from './store.js'
 import type {
+  DashboardCursor, DashboardFilters, DashboardPage,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
@@ -178,6 +179,35 @@ export class MemoryStore implements Store {
       ...notification,
       status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
     })
+  }
+
+  async listDashboardJobs(
+    params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
+  ): Promise<DashboardPage> {
+    const rows = [...this.scores.values()]
+      .map((score) => ({ score, job: this.jobs.get(score.jobId)! }))
+      .filter(({ job, score }) =>
+        job && !job.hidden && score.status === 'ok'
+        && (params.minScore === undefined || score.total >= params.minScore)
+        && (!params.bookmarkedOnly || job.bookmarked)
+        && (!params.unnotifiedOnly || score.notifiedAt === null))
+      // SupabaseStore와 같은 순서여야 한다 — 동점은 jobId 내림차순으로 갈린다.
+      .sort((a, b) => b.score.total - a.score.total || (a.job.id < b.job.id ? 1 : -1))
+      .filter(({ job, score }) => !params.cursor
+        || score.total < params.cursor.total
+        || (score.total === params.cursor.total && job.id < params.cursor.jobId))
+      .slice(0, params.limit)
+      .map(({ job, score }) => ({
+        jobId: job.id, companyName: job.companyName, position: job.position,
+        url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked,
+        total: score.total, breakdown: score.breakdown, notifiedAt: score.notifiedAt,
+      }))
+    const last = rows[rows.length - 1]
+    return {
+      rows,
+      nextCursor: rows.length === params.limit && last
+        ? { total: last.total, jobId: last.jobId } : null,
+    }
   }
 
   async startRun(pipeline: RunPipeline, trigger: RunTrigger) {

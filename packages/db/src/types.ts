@@ -112,3 +112,37 @@ export interface NodeRunEntry {
   durationMs: number
   error: string | null
 }
+
+/** 목록용. reasoning을 넣지 않는다 — 168행 페이로드 107KB 중 64KB가 reasoning인데 목록에서는 표시하지 않는다. */
+export interface DashboardRow {
+  jobId: string
+  companyName: string
+  position: string
+  url: string
+  dueTime: string | null
+  bookmarked: boolean
+  total: number
+  breakdown: Record<string, number>
+  notifiedAt: string | null
+}
+
+/**
+ * 커서가 두 값인 이유: 점수 동점이 흔하다(실측 168건이 60개 값에 몰려 있고
+ * 151행이 동점, 최대 9행). total 단독 커서로는 페이지 경계에서 행이 누락되거나
+ * 중복된다. offset도 쓰지 않는다 — 북마크 토글이나 신규 채점으로 순서가 밀린다.
+ */
+export interface DashboardCursor {
+  total: number
+  jobId: string
+}
+
+export interface DashboardFilters {
+  minScore?: number
+  bookmarkedOnly?: boolean
+  unnotifiedOnly?: boolean
+}
+
+export interface DashboardPage {
+  rows: DashboardRow[]
+  nextCursor: DashboardCursor | null
+}

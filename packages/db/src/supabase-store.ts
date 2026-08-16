@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Store } from './store.js'
 import type {
+  DashboardCursor, DashboardFilters, DashboardPage,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   NotifyRule, Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search,
   SearchParams, Source,
@@ -25,6 +26,10 @@ const NOTIFY_CANDIDATE_SELECT = `*, jobs(
   address_district, address_full, url, due_time, first_seen_at,
   detail_status, detail_attempts, detail_error, bookmarked, hidden
 )`
+
+// raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다.
+const DASHBOARD_SELECT =
+  'total, breakdown, notified_at, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
@@ -55,6 +60,14 @@ interface ScoreRow {
 
 interface NotificationRow {
   id: string; status: string; job_ids: string[]
+}
+
+type DashboardJoinRow = {
+  total: number; breakdown: Record<string, number>; notified_at: string | null
+  jobs: {
+    id: string; company_name: string; position: string; url: string
+    due_time: string | null; bookmarked: boolean; hidden: boolean
+  }
 }
 
 // scores.job_id is both primary key and FK -> jobs, so this is a 1:1
@@ -300,6 +313,38 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending',
       }).eq('id', notificationId)
       if (error) throw new Error(error.message)
+    },
+
+    async listDashboardJobs(
+      params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
+    ): Promise<DashboardPage> {
+      // `!inner` + 명시적 컬럼 목록이라 select 문자열에 `*`가 없다 — postgrest-js는
+      // Database 제네릭 없이는 1:1 embed의 카디널리티를 알 수 없어 jobs를 배열로
+      // 추론한다(런타임 값은 실제로는 객체). NewResultOne을 직접 지정해 우회한다.
+      let q = db.from('scores').select<typeof DASHBOARD_SELECT, DashboardJoinRow>(DASHBOARD_SELECT)
+        .eq('status', 'ok').eq('jobs.hidden', false)
+        .order('total', { ascending: false })
+        .order('job_id', { ascending: false })
+        .limit(params.limit)
+      if (params.minScore !== undefined) q = q.gte('total', params.minScore)
+      if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
+      if (params.unnotifiedOnly) q = q.is('notified_at', null)
+      if (params.cursor) {
+        // keyset: (total, job_id) < (cursor.total, cursor.jobId)
+        q = q.or(`total.lt.${params.cursor.total},and(total.eq.${params.cursor.total},job_id.lt.${params.cursor.jobId})`)
+      }
+      const raw = unwrap<DashboardJoinRow[]>(await q)
+      const rows = raw.map((r) => ({
+        jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
+        url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked,
+        total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
+      }))
+      const last = rows[rows.length - 1]
+      return {
+        rows,
+        nextCursor: rows.length === params.limit && last
+          ? { total: last.total, jobId: last.jobId } : null,
+      }
     },
 
     async startRun(pipeline: RunPipeline, trigger: RunTrigger) {
