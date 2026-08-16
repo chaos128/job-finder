@@ -1,4 +1,16 @@
-export const RUBRIC_VERSION = 'v5'
+/**
+ * 이 상수가 추적하는 것은 **채점 기준**이지 출력 형식이 아니다. 다섯 축의 앵커·배점·
+ * 총점 규칙이 바뀔 때만 올린다 — 그래야 `scores.rubric_version`이 다른 두 행을 두고
+ * "서로 다른 기준으로 매긴 점수"라고 말할 수 있다.
+ *
+ * 실제로 이 브랜치에서 본문은 바뀌었다(`summary` 출력 지시가 추가됨). 그런데도 버전을
+ * 올리지 않은 이유: 다섯 축의 앵커가 바이트 단위로 동일해서 v3에서 매긴 점수와 지금
+ * 매기는 점수가 완전히 비교 가능하기 때문이다. 여기서 v4/v5로 올리면 운영의 168행(전부
+ * v3)과 섞이는 순간 StatusStrip의 "혼재" 경고가 켜지는데, 168건 재채점은 범위 밖이라
+ * 그 경고를 끌 방법이 없다 — 채점 지연을 알리는 amber 배지와 똑같이 렌더되는 거짓
+ * 경고가 영구히 켜져 있으면 소유자가 amber 자체를 무시하게 된다.
+ */
+export const RUBRIC_VERSION = 'v3'
 
 export const RUBRIC_AXES = ['stack', 'role', 'domain', 'growth', 'conditions'] as const
 export type RubricAxis = (typeof RUBRIC_AXES)[number]
@@ -18,7 +30,7 @@ export const MAX_AXIS_SCORE = 20
  * `packages/scoring/src` 디렉터리가 없는 실제 배포 환경을 흉내 내면
  * `ENOENT: no such file or directory, open '.../packages/scoring/src/rubric.md'`로 500이 난다.
  */
-const RUBRIC_MARKDOWN = `# 채점 루브릭 v5
+const RUBRIC_MARKDOWN = `# 채점 루브릭 v3
 
 공고 1건을 5개 축으로 채점한다. 각 축 0~20점, 합계 0~100점.
 **반드시 한 번에 한 건만 채점한다.** 여러 건을 한꺼번에 보면 앞 공고가 뒤 공고의 기준점이 된다.
