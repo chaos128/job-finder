@@ -37,6 +37,7 @@ export interface Store {
   getJobDetail(jobId: string): Promise<ScoredJob | null>
   getDashboardStats(): Promise<DashboardStats>
   setJobBookmarked(jobId: string, bookmarked: boolean): Promise<void>
+  setJobHidden(jobId: string, hidden: boolean): Promise<void>
   /**
    * 아직 status='ok' 점수가 없는 공고. 채점 실패분도 포함한다.
    * 오래된 수집분부터 limit건까지 주고, 잘리기 전 총량을 함께 준다.

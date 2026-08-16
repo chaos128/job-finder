@@ -123,6 +123,8 @@ export interface DashboardRow {
   url: string
   dueTime: string | null
   bookmarked: boolean
+  /** 제외됨(exclude) 여부. true면 목록 맨 뒤로 정렬되고 카드가 비활성 처리된다. */
+  hidden: boolean
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null
@@ -131,11 +133,15 @@ export interface DashboardRow {
 }
 
 /**
- * 커서가 두 값인 이유: 점수 동점이 흔하다(실측 168건이 60개 값에 몰려 있고
- * 151행이 동점, 최대 9행). total 단독 커서로는 페이지 경계에서 행이 누락되거나
- * 중복된다. offset도 쓰지 않는다 — 북마크 토글이나 신규 채점으로 순서가 밀린다.
+ * 커서가 세 값인 이유: 정렬이 `hidden asc, total desc, jobId desc`다 — 제외된
+ * 공고는 점수와 무관하게 맨 뒤로 보낸다. 점수 동점도 흔해서(실측 168건이 60개
+ * 값에 몰려 있고 151행이 동점, 최대 9행) total 단독 커서로는 페이지 경계에서
+ * 행이 누락되거나 중복된다. hidden까지 포함해야 "제외 안 됨 → 제외됨" 경계도
+ * 같은 이유로 안전하다. offset도 쓰지 않는다 — 북마크·제외 토글이나 신규
+ * 채점으로 순서가 밀린다.
  */
 export interface DashboardCursor {
+  hidden: boolean
   total: number
   jobId: string
 }

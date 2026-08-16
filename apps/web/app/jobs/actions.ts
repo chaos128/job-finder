@@ -22,6 +22,12 @@ export async function toggleBookmark(jobId: string, next: boolean): Promise<void
   revalidatePath(`/jobs/${jobId}`)
 }
 
+export async function toggleHidden(jobId: string, next: boolean): Promise<void> {
+  await getStore().setJobHidden(jobId, next)
+  revalidatePath('/jobs')
+  revalidatePath(`/jobs/${jobId}`)
+}
+
 /** 토글이 켜질 때만 호출된다 — 채점된 목록의 질의와는 무관한 별도 구간이다. */
 export async function loadUnscoredJobs(): Promise<UnscoredJobs> {
   return getStore().listUnscoredJobs(UNSCORED_LIMIT)

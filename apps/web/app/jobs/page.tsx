@@ -20,7 +20,10 @@ export default async function Page() {
   // listDashboardJobs에는 due_time 필터가 없다 — notify가 실제로 고를 양과 맞추려면
   // selectForDigest와 같은 만료 판정(isExpired)을 여기서도 적용해야 한다. 안 그러면
   // 마감 지난 공고가 "알림 대기"에 영원히 남는다.
-  const pendingCount = pending.rows.filter((row) => !isExpired(row.dueTime, now)).length
+  // hidden도 마찬가지로 listDashboardJobs가 걸러주지 않는다(대시보드 목록에는 이제
+  // 제외된 공고도 맨 뒤에 보여야 해서) — listNotifyCandidates는 hidden을 걸러내므로
+  // 제외된 공고를 "알림 대기"에 넣으면 실제로는 절대 발송되지 않을 건수를 보여준다.
+  const pendingCount = pending.rows.filter((row) => !isExpired(row.dueTime, now) && !row.hidden).length
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">

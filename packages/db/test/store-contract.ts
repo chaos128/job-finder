@@ -198,7 +198,7 @@ export function describeStoreContract(
       ])
       const page = await store.listDashboardJobs({ limit: 2 })
       expect(page.rows.map((r) => r.total)).toEqual([90, 80])
-      expect(page.nextCursor).toEqual({ total: 80, jobId: page.rows[1]!.jobId })
+      expect(page.nextCursor).toEqual({ hidden: false, total: 80, jobId: page.rows[1]!.jobId })
     })
 
     // 동점이 페이지 경계에 걸리면 total 단독 커서는 행을 건너뛰거나 중복시킨다.
@@ -217,6 +217,36 @@ export function describeStoreContract(
       }
       expect(seen).toHaveLength(5)
       expect(new Set(seen).size).toBe(5)
+    })
+
+    // 정렬이 hidden asc, total desc, jobId desc(3단)로 바뀌면서 새로 생긴 경계 —
+    // 제외 안 된 공고와 제외된 공고 사이. total 단독 커서가 동점 경계를 놓쳤던 것과
+    // 같은 이유로, hidden을 커서에 안 넣으면 이 경계에서 행이 누락되거나 중복된다.
+    // limit=2로 5행(동점 4 + 별도 1행, 그중 2행 제외)을 페이징해 경계가 페이지
+    // 중간에 걸리게 만든다.
+    test('제외(hidden) 경계를 넘어가도 누락도 중복도 없다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 74 }, { ext: '2', total: 74 }, { ext: '3', total: 74 },
+        { ext: '4', total: 74 }, { ext: '5', total: 60 },
+      ])
+      await store.setJobHidden(created[0]!.id, true)
+      await store.setJobHidden(created[4]!.id, true)
+      const seen: string[] = []
+      let cursor: DashboardCursor | undefined
+      for (let guard = 0; guard < 10; guard++) {
+        const page: DashboardPage = await store.listDashboardJobs({ limit: 2, cursor })
+        seen.push(...page.rows.map((r) => r.jobId))
+        if (!page.nextCursor) break
+        cursor = page.nextCursor
+      }
+      expect(seen).toHaveLength(5)
+      expect(new Set(seen).size).toBe(5)
+      // 제외된 두 건(created[0], created[4])은 항상 제외 안 된 세 건 뒤에 와야 한다.
+      const hiddenIds = new Set([created[0]!.id, created[4]!.id])
+      const hiddenPositions = seen
+        .map((id, i) => (hiddenIds.has(id) ? i : -1))
+        .filter((i) => i >= 0)
+      expect(Math.min(...hiddenPositions)).toBeGreaterThanOrEqual(3)
     })
 
     test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {
@@ -255,6 +285,19 @@ export function describeStoreContract(
       expect((await store.listDashboardJobs({ limit: 10 })).rows[0]!.bookmarked).toBe(true)
       await store.setJobBookmarked(created!.id, false)
       expect((await store.listDashboardJobs({ limit: 10 })).rows[0]!.bookmarked).toBe(false)
+    })
+
+    test('setJobHidden은 값을 뒤집고, 켜지면 점수와 무관하게 목록 맨 뒤로 보낸다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 70 },
+      ])
+      await store.setJobHidden(created[0]!.id, true)
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows.map((r) => r.jobId)).toEqual([created[1]!.id, created[0]!.id])
+      expect(page.rows[1]!.hidden).toBe(true)
+      await store.setJobHidden(created[0]!.id, false)
+      const restored = await store.listDashboardJobs({ limit: 10 })
+      expect(restored.rows.map((r) => r.jobId)).toEqual([created[0]!.id, created[1]!.id])
     })
 
     test('getDashboardStats는 건수와 마지막 채점, 루브릭 분포를 준다', async () => {

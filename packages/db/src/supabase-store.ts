@@ -341,38 +341,60 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     async listDashboardJobs(
       params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
     ): Promise<DashboardPage> {
-      // `!inner` + 명시적 컬럼 목록이라 select 문자열에 `*`가 없다 — postgrest-js는
-      // Database 제네릭 없이는 1:1 embed의 카디널리티를 알 수 없어 jobs를 배열로
-      // 추론한다(런타임 값은 실제로는 객체). NewResultOne을 직접 지정해 우회한다.
-      let q = db.from('scores').select<typeof DASHBOARD_SELECT, DashboardJoinRow>(DASHBOARD_SELECT)
-        .eq('status', 'ok').eq('jobs.hidden', false)
-        .order('total', { ascending: false })
-        .order('job_id', { ascending: false })
-        .limit(params.limit)
-      if (params.minScore !== undefined) q = q.gte('total', params.minScore)
-      if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
-      if (params.unnotifiedOnly) q = q.is('notified_at', null)
-      if (params.cursor) {
-        // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
-        // uuid가 아닌 jobId는 어떤 행과도 동점 비교가 성립하지 않는다 — 캐스팅
-        // 400으로 페이지 전체를 죽이는 대신 동점 항만 뺀다(loadMoreJobs는 검증
-        // 없는 공개 Server Action이라 임의 커서가 들어올 수 있다).
-        q = q.or(isUuid(params.cursor.jobId)
-          ? `total.lt.${params.cursor.total},and(total.eq.${params.cursor.total},job_id.lt.${params.cursor.jobId})`
-          : `total.lt.${params.cursor.total}`)
+      // 정렬은 hidden asc, total desc, job_id desc(제외된 공고는 점수와 무관하게
+      // 맨 뒤). 처음엔 order()/or()에 jobs.hidden을 섞어 한 질의로 풀려 했으나,
+      // PostgREST의 or()/and() 로직 트리 파서는 임베드 리소스의 컬럼 참조
+      // (`jobs.hidden.eq.true`)를 받지 못하고 "failed to parse logic tree"로
+      // 400을 낸다 — 운영 조회로 직접 확인했다(계약 테스트는 MemoryStore만 돌아
+      // 이 자리를 못 잡는다). 그래서 hidden을 정렬/커서에 섞지 않고, hidden=false
+      // 버킷과 hidden=true 버킷을 각각 기존 2단(total, job_id) 질의로 따로 물어
+      // 이어 붙인다 — `.eq('jobs.hidden', x)`는 로직 트리 밖의 평범한 필터라
+      // 문제없이 동작한다(이 파일이 원래부터 쓰던 방식 그대로, 값만 파라미터화).
+      const bucket = async (hidden: boolean, limit: number, cursor?: { total: number; jobId: string }) => {
+        // `!inner` + 명시적 컬럼 목록이라 select 문자열에 `*`가 없다 — postgrest-js는
+        // Database 제네릭 없이는 1:1 embed의 카디널리티를 알 수 없어 jobs를 배열로
+        // 추론한다(런타임 값은 실제로는 객체). NewResultOne을 직접 지정해 우회한다.
+        let q = db.from('scores').select<typeof DASHBOARD_SELECT, DashboardJoinRow>(DASHBOARD_SELECT)
+          .eq('status', 'ok').eq('jobs.hidden', hidden)
+          .order('total', { ascending: false })
+          .order('job_id', { ascending: false })
+          .limit(limit)
+        if (params.minScore !== undefined) q = q.gte('total', params.minScore)
+        if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
+        if (params.unnotifiedOnly) q = q.is('notified_at', null)
+        if (cursor) {
+          // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
+          // uuid가 아닌 jobId는 어떤 행과도 동점 비교가 성립하지 않는다 — 캐스팅
+          // 400으로 페이지 전체를 죽이는 대신 동점 항만 뺀다(loadMoreJobs는 검증
+          // 없는 공개 Server Action이라 임의 커서가 들어올 수 있다).
+          q = q.or(isUuid(cursor.jobId)
+            ? `total.lt.${cursor.total},and(total.eq.${cursor.total},job_id.lt.${cursor.jobId})`
+            : `total.lt.${cursor.total}`)
+        }
+        const raw = unwrap<DashboardJoinRow[]>(await q)
+        return raw.map((r) => ({
+          jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
+          url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked, hidden,
+          total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
+          summary: r.summary,
+        }))
       }
-      const raw = unwrap<DashboardJoinRow[]>(await q)
-      const rows = raw.map((r) => ({
-        jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
-        url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked,
-        total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
-        summary: r.summary,
-      }))
+
+      const cursorHidden = params.cursor?.hidden ?? false
+      let rows = await bucket(cursorHidden, params.limit, params.cursor)
+      // 비제외(hidden=false) 버킷이 이 페이지 안에서 바닥났다(요청한 limit보다
+      // 적게 왔다) — 남은 자리를 제외(hidden=true) 버킷의 맨 앞부터 채운다. 커서
+      // 없이 새로 불러야 한다: 비제외 커서(total/jobId)는 제외 버킷에서 아무
+      // 의미가 없다. (커서가 이미 hidden=true 버킷에 있을 때는 이 분기를 타지
+      // 않는다 — 더 뒤에 채울 버킷이 없다.)
+      if (!cursorHidden && rows.length < params.limit) {
+        rows = rows.concat(await bucket(true, params.limit - rows.length))
+      }
       const last = rows[rows.length - 1]
       return {
         rows,
         nextCursor: rows.length === params.limit && last
-          ? { total: last.total, jobId: last.jobId } : null,
+          ? { hidden: last.hidden, total: last.total, jobId: last.jobId } : null,
       }
     },
 
@@ -388,6 +410,12 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     async setJobBookmarked(jobId: string, bookmarked: boolean) {
       if (!isUuid(jobId)) return
       const { error } = await db.from('jobs').update({ bookmarked }).eq('id', jobId)
+      if (error) throw new Error(error.message)
+    },
+
+    async setJobHidden(jobId: string, hidden: boolean) {
+      if (!isUuid(jobId)) return
+      const { error } = await db.from('jobs').update({ hidden }).eq('id', jobId)
       if (error) throw new Error(error.message)
     },
 

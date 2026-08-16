@@ -3,9 +3,23 @@
 import type { DashboardCursor, DashboardFilters, DashboardRow } from '@job-finder/db'
 import { Badge, Button, cn, Input } from '@job-finder/ui'
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { loadMoreJobs, toggleBookmark } from '../actions'
+import { loadMoreJobs, toggleBookmark, toggleHidden } from '../actions'
 import { JobCard } from './job-card'
 import { UnscoredList } from './unscored-list'
+
+/**
+ * packages/db/src/memory-store.ts의 compareDashboardOrder와 반드시 같은 결과를
+ * 내야 한다(hidden asc → total desc → jobId desc). getStore()는 서버 전용(서비스
+ * 롤 키)이라 '@job-finder/db' 값을 이 클라이언트 컴포넌트에서 import할 수 없으므로
+ * — 지금까지 이 파일이 그 패키지에서 타입만 가져오던 관례를 깨게 된다 — 정렬
+ * 로직만 그대로 복제한다. 제외 토글이 서버 응답을 기다리지 않고 그 자리에서
+ * 카드를 맨 뒤로 보내되, 새로고침 후 서버가 주는 순서와 어긋나지 않게 하기 위함이다.
+ */
+function compareDashboardOrder(a: DashboardRow, b: DashboardRow): number {
+  if (a.hidden !== b.hidden) return a.hidden ? 1 : -1
+  if (a.total !== b.total) return b.total - a.total
+  return a.jobId < b.jobId ? 1 : -1
+}
 
 export function JobList({ initialRows, initialCursor }: {
   initialRows: DashboardRow[]; initialCursor: DashboardCursor | null
@@ -83,6 +97,25 @@ export function JobList({ initialRows, initialCursor }: {
       } catch (e) {
         // 실패를 삼키면 저장된 줄 안다. 되돌리고 알린다.
         setRows((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, bookmarked: !next } : r)))
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    })
+  }
+
+  // 북마크와 같은 규약: 낙관적으로 먼저 반영, 실패하면 되돌리고 알린다. 다른 점은
+  // hidden이 정렬 키라는 것 — 값만 바꾸면 서버가 주는 순서(맨 뒤)와 어긋나므로
+  // 매번 compareDashboardOrder로 다시 정렬해야 "새로고침 전까지도" 위치가 맞는다.
+  function onToggleHidden(jobId: string, next: boolean) {
+    setRows((prev) => prev
+      .map((r) => (r.jobId === jobId ? { ...r, hidden: next } : r))
+      .sort(compareDashboardOrder))
+    startTransition(async () => {
+      try {
+        await toggleHidden(jobId, next)
+      } catch (e) {
+        setRows((prev) => prev
+          .map((r) => (r.jobId === jobId ? { ...r, hidden: !next } : r))
+          .sort(compareDashboardOrder))
         setError(e instanceof Error ? e.message : String(e))
       }
     })
@@ -168,7 +201,10 @@ export function JobList({ initialRows, initialCursor }: {
 
           <div className="space-y-3">
             {rows.map((row) => (
-              <JobCard key={row.jobId} row={row} onToggleBookmark={onToggleBookmark} />
+              <JobCard
+                key={row.jobId} row={row}
+                onToggleBookmark={onToggleBookmark} onToggleHidden={onToggleHidden}
+              />
             ))}
           </div>
 

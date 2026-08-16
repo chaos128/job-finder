@@ -10,6 +10,22 @@ const MAX_ATTEMPTS = 3
 /** SupabaseStore의 listNotifyCandidates와 같은 상한 — 두 구현이 같은 계약을 지켜야 한다. */
 const NOTIFY_CANDIDATE_LIMIT = 200
 
+/**
+ * 대시보드 정렬의 유일한 정의: hidden(제외됨) 오름차순 → total 내림차순 →
+ * jobId 내림차순. 제외된 공고는 점수와 무관하게 맨 뒤로 간다. SupabaseStore의
+ * order()/or() 커서 로직과 반드시 같은 결과를 내야 한다(계약 테스트가 확인한다).
+ * 정렬(.sort)과 커서 판정(다음 페이지 대상 여부) 양쪽에 이 함수 하나만 써서,
+ * 두 로직이 따로 구현되며 어긋나는 걸 막는다.
+ */
+function compareDashboardOrder(
+  a: { hidden: boolean; total: number; jobId: string },
+  b: { hidden: boolean; total: number; jobId: string },
+): number {
+  if (a.hidden !== b.hidden) return a.hidden ? 1 : -1
+  if (a.total !== b.total) return b.total - a.total
+  return a.jobId < b.jobId ? 1 : -1
+}
+
 export class MemoryStore implements Store {
   private seq = 0
   /** insertJobs 호출(=실 스토어의 한 배치) 단위로만 증가하는 수집 시각. */
@@ -198,19 +214,23 @@ export class MemoryStore implements Store {
     const rows = [...this.scores.values()]
       .map((score) => ({ score, job: this.jobs.get(score.jobId)! }))
       .filter(({ job, score }) =>
-        job && !job.hidden && score.status === 'ok'
+        job && score.status === 'ok'
         && (params.minScore === undefined || score.total >= params.minScore)
         && (!params.bookmarkedOnly || job.bookmarked)
         && (!params.unnotifiedOnly || score.notifiedAt === null))
-      // SupabaseStore와 같은 순서여야 한다 — 동점은 jobId 내림차순으로 갈린다.
-      .sort((a, b) => b.score.total - a.score.total || (a.job.id < b.job.id ? 1 : -1))
-      .filter(({ job, score }) => !params.cursor
-        || score.total < params.cursor.total
-        || (score.total === params.cursor.total && job.id < params.cursor.jobId))
+      // SupabaseStore와 같은 순서여야 한다 — 제외된 공고는 맨 뒤, 그 안에서는
+      // 동점을 jobId 내림차순으로 가른다.
+      .sort((a, b) => compareDashboardOrder(
+        { hidden: a.job.hidden, total: a.score.total, jobId: a.job.id },
+        { hidden: b.job.hidden, total: b.score.total, jobId: b.job.id },
+      ))
+      .filter(({ job, score }) => !params.cursor || compareDashboardOrder(
+        { hidden: job.hidden, total: score.total, jobId: job.id }, params.cursor,
+      ) > 0)
       .slice(0, params.limit)
       .map(({ job, score }) => ({
         jobId: job.id, companyName: job.companyName, position: job.position,
-        url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked,
+        url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked, hidden: job.hidden,
         total: score.total, breakdown: score.breakdown, notifiedAt: score.notifiedAt,
         summary: score.summary,
       }))
@@ -218,7 +238,7 @@ export class MemoryStore implements Store {
     return {
       rows,
       nextCursor: rows.length === params.limit && last
-        ? { total: last.total, jobId: last.jobId } : null,
+        ? { hidden: last.hidden, total: last.total, jobId: last.jobId } : null,
     }
   }
 
@@ -231,6 +251,11 @@ export class MemoryStore implements Store {
   async setJobBookmarked(jobId: string, bookmarked: boolean) {
     const job = this.jobs.get(jobId)
     if (job) this.jobs.set(jobId, { ...job, bookmarked })
+  }
+
+  async setJobHidden(jobId: string, hidden: boolean) {
+    const job = this.jobs.get(jobId)
+    if (job) this.jobs.set(jobId, { ...job, hidden })
   }
 
   async listUnscoredJobs(limit: number): Promise<UnscoredJobs> {

@@ -20,6 +20,28 @@ function captureRequestUrls(body = '[]', headers: Record<string, string> = {}): 
   return urls
 }
 
+/**
+ * listDashboardJobs의 버킷 이어붙이기(비제외 버킷이 limit보다 짧으면 제외 버킷을
+ * 추가로 부른다)를 확인하려면 호출마다 다른 응답이 필요하다 — captureRequestUrls는
+ * 매 호출에 같은 본문을 준다.
+ */
+function captureRequestUrlsSequential(bodies: string[]): string[] {
+  const urls: string[] = []
+  let call = 0
+  vi.stubGlobal('fetch', async (input: Parameters<typeof fetch>[0]) => {
+    urls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+    const body = bodies[Math.min(call, bodies.length - 1)]!
+    call += 1
+    return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } })
+  })
+  return urls
+}
+
+const dashboardRow = (id: string, hidden: boolean) => ({
+  total: 50, breakdown: {}, notified_at: null, summary: '',
+  jobs: { id, company_name: 'c', position: 'p', url: 'u', due_time: null, bookmarked: false, hidden },
+})
+
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준다', () => {
@@ -31,9 +53,12 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
     await expect(store.setJobBookmarked('없는-id', true)).resolves.toBeUndefined()
   })
 
+  // cursor.hidden: true를 써서 단일 버킷 호출로 고정한다 — hidden: false로 두면
+  // 기본 스텁([])이 항상 limit보다 짧게 와서 버킷 이어붙이기(아래 describe)가
+  // 끼어들어 동점 비교 항 자체를 확인하려는 이 테스트의 URL 개수가 흔들린다.
   test('커서의 jobId가 uuid가 아니면 동점 비교 항을 빼고 질의한다', async () => {
     const urls = captureRequestUrls()
-    await store.listDashboardJobs({ limit: 10, cursor: { total: 70, jobId: '없는-id' } })
+    await store.listDashboardJobs({ limit: 10, cursor: { hidden: true, total: 70, jobId: '없는-id' } })
     expect(urls).toHaveLength(1)
     expect(urls[0]).toContain('total.lt.70')
     expect(urls[0]).not.toContain('job_id.lt')
@@ -42,8 +67,45 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
   test('uuid 커서는 동점 비교 항을 그대로 싣는다', async () => {
     const urls = captureRequestUrls()
     const jobId = '11111111-2222-3333-4444-555555555555'
-    await store.listDashboardJobs({ limit: 10, cursor: { total: 70, jobId } })
+    await store.listDashboardJobs({ limit: 10, cursor: { hidden: true, total: 70, jobId } })
     expect(decodeURIComponent(urls[0]!)).toContain(`and(total.eq.70,job_id.lt.${jobId})`)
+  })
+})
+
+// 라이브 스위트가 게이트 오프라 postgrest-js가 실제로 만드는 쿼리 문자열은 이렇게
+// fetch를 가로채는 수밖에 확인할 수 없다. hidden 3단 커서는 처음에 order()/or()에
+// jobs.hidden을 섞어 한 질의로 풀려 했으나, 로컬 dev 서버로 운영 데이터를 실제로
+// 조회해보니 PostgREST의 or()/and() 로직 트리 파서가 임베드 컬럼 참조를 받지 못하고
+// "failed to parse logic tree"로 400을 냈다 — MemoryStore 계약 테스트만으로는 이
+// SupabaseStore 전용 실패를 잡을 수 없었다. 그래서 hidden=false/true 버킷을 각각
+// 기존 2단(total, job_id) 질의로 따로 물어 이어 붙이는 방식으로 바꿨다.
+describe('SupabaseStore.listDashboardJobs의 hidden 버킷 이어붙이기', () => {
+  test('비제외(hidden=false) 버킷 질의에는 jobs.hidden=eq.false가 붙는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listDashboardJobs({ limit: 10 })
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.hidden=eq.false')
+  })
+
+  test('커서가 이미 제외(hidden=true) 구간이면 질의 한 번으로 끝난다 — 더 채울 버킷이 없다', async () => {
+    const urls = captureRequestUrls()
+    await store.listDashboardJobs({ limit: 10, cursor: { hidden: true, total: 70, jobId: '11111111-2222-3333-4444-555555555555' } })
+    expect(urls).toHaveLength(1)
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.hidden=eq.true')
+  })
+
+  test('비제외 버킷이 limit보다 적게 오면 제외 버킷을 이어서 부른다', async () => {
+    const urls = captureRequestUrlsSequential([
+      JSON.stringify([dashboardRow('11111111-1111-1111-1111-111111111111', false)]),
+      JSON.stringify([dashboardRow('22222222-2222-2222-2222-222222222222', true)]),
+    ])
+    const page = await store.listDashboardJobs({ limit: 10 })
+    expect(urls).toHaveLength(2)
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.hidden=eq.false')
+    // 첫 버킷이 1행만 줘서 limit(10)에 9행 모자란다 — 두 번째 호출은 그 나머지만 청한다.
+    expect(decodeURIComponent(urls[1]!)).toContain('jobs.hidden=eq.true')
+    expect(decodeURIComponent(urls[1]!)).toContain('limit=9')
+    // 합쳐진 결과의 hidden 플래그가 각 버킷의 값을 그대로 반영한다.
+    expect(page.rows.map((r) => r.hidden)).toEqual([false, true])
   })
 })
 

@@ -7,12 +7,21 @@ import { AXIS_BAR_COLOR, scoreBandClass } from './score-visuals'
 
 const AXES = ['stack', 'role', 'domain', 'growth', 'conditions'] as const
 
-export function JobCard({ row, onToggleBookmark }: {
+export function JobCard({ row, onToggleBookmark, onToggleHidden }: {
   row: DashboardRow
   onToggleBookmark: (jobId: string, next: boolean) => void
+  onToggleHidden: (jobId: string, next: boolean) => void
 }) {
   return (
-    <div className="flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+    <div
+      className={cn(
+        'flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm',
+        // 제외된 카드는 비활성처럼 보이게: 회색 배경 + 텍스트 흐림 + 클릭 대상이
+        // 아님을 알리는 opacity. 실제로 pointer-events를 막지는 않는다 — 되돌리기
+        // 버튼(과 상세 링크)은 계속 눌러야 하기 때문이다.
+        row.hidden && 'bg-neutral-100 opacity-60 grayscale',
+      )}
+    >
       <div className={cn('w-14 shrink-0 text-3xl font-bold tabular-nums', scoreBandClass(row.total))}>
         {row.total}
       </div>
@@ -61,15 +70,27 @@ export function JobCard({ row, onToggleBookmark }: {
           {row.notifiedAt && <Badge>발송됨</Badge>}
         </div>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        aria-label={row.bookmarked ? '북마크 해제' : '북마크'}
-        onClick={() => onToggleBookmark(row.jobId, !row.bookmarked)}
-        className="h-auto shrink-0 px-2 text-2xl leading-none"
-      >
-        {row.bookmarked ? '★' : '☆'}
-      </Button>
+      <div className="flex shrink-0 flex-col items-center">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={row.bookmarked ? '북마크 해제' : '북마크'}
+          onClick={() => onToggleBookmark(row.jobId, !row.bookmarked)}
+          className="h-auto px-2 text-2xl leading-none"
+        >
+          {row.bookmarked ? '★' : '☆'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          aria-label={row.hidden ? '제외 해제' : '제외'}
+          aria-pressed={row.hidden}
+          onClick={() => onToggleHidden(row.jobId, !row.hidden)}
+          className={cn('h-auto px-2 text-lg leading-none', row.hidden && 'text-neutral-900')}
+        >
+          {row.hidden ? '↺' : '✕'}
+        </Button>
+      </div>
     </div>
   )
 }
