@@ -10,7 +10,7 @@ const store = createSupabaseStore('http://127.0.0.1:1', 'test-key')
 /** 커서 경로는 질의가 실제로 나가야 확인된다 — 나가는 URL만 가로챈다. */
 function captureRequestUrls(): string[] {
   const urls: string[] = []
-  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+  vi.stubGlobal('fetch', async (input: Parameters<typeof fetch>[0]) => {
     urls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
     return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
   })
