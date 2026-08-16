@@ -9,7 +9,7 @@ const doubler: Node<number, number> = {
 
 async function setup() {
   const store = new MemoryStore()
-  const runId = await store.startRun('cron')
+  const runId = await store.startRun('collect', 'cron')
   return { store, runId }
 }
 

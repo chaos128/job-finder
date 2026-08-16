@@ -29,7 +29,7 @@ export async function runCollect(
   opts: { detailLimit?: number } = {},
 ): Promise<CollectReport> {
   const { store, source } = deps
-  const runId = await store.startRun(trigger)
+  const runId = await store.startRun('collect', trigger)
 
   try {
     const searches = await store.listEnabledSearches()

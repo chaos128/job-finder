@@ -1,7 +1,7 @@
 import type { Store } from './store.js'
 import type {
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  Profile, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
+  Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -18,6 +18,7 @@ export class MemoryStore implements Store {
   /** notifications.attempts 컬럼에 대응. Notification 타입에는 노출하지 않는다. */
   private readonly notificationAttempts = new Map<string, number>()
   readonly nodeRuns: NodeRunEntry[] = []
+  readonly runs: { id: string; pipeline: RunPipeline; trigger: RunTrigger; startedAt: string; endedAt: string | null }[] = []
   profile: Profile = {
     resumeText: 'resume',
     rubricVersion: 'v1',
@@ -179,7 +180,15 @@ export class MemoryStore implements Store {
     })
   }
 
-  async startRun(_trigger: RunTrigger) { return this.nextId('run') }
-  async endRun(_runId: string) {}
+  async startRun(pipeline: RunPipeline, trigger: RunTrigger) {
+    const id = this.nextId('run')
+    this.runs.push({ id, pipeline, trigger, startedAt: new Date().toISOString(), endedAt: null })
+    return id
+  }
+
+  async endRun(runId: string) {
+    const run = this.runs.find((r) => r.id === runId)
+    if (run) run.endedAt = new Date().toISOString()
+  }
   async recordNodeRun(entry: NodeRunEntry) { this.nodeRuns.push(entry) }
 }

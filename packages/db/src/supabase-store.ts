@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Store } from './store.js'
 import type {
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  NotifyRule, Profile, RunTrigger, ScoreInput, ScoredJob, Search,
+  NotifyRule, Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search,
   SearchParams, Source,
 } from './types.js'
 
@@ -302,9 +302,9 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (error) throw new Error(error.message)
     },
 
-    async startRun(trigger: RunTrigger) {
+    async startRun(pipeline: RunPipeline, trigger: RunTrigger) {
       const row = unwrap<{ id: string }>(
-        await db.from('runs').insert({ trigger }).select('id').single(),
+        await db.from('runs').insert({ pipeline, trigger }).select('id').single(),
       )
       return row.id
     },

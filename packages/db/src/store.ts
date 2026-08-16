@@ -1,6 +1,6 @@
 import type {
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  Profile, RunTrigger, ScoreInput, ScoredJob, Search, Source,
+  Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
 
 export interface Store {
@@ -30,7 +30,8 @@ export interface Store {
   markNotificationFailed(notificationId: string, message: string): Promise<void>
 
   // ── 관측
-  startRun(trigger: RunTrigger): Promise<string>
+  /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */
+  startRun(pipeline: RunPipeline, trigger: RunTrigger): Promise<string>
   endRun(runId: string): Promise<void>
   recordNodeRun(entry: NodeRunEntry): Promise<void>
 }

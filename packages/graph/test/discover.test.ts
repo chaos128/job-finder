@@ -138,7 +138,7 @@ test('store 실패는 STORE_FAILED / retryable로 분류한다', async () => {
 
 test('runner를 통해 여러 검색을 처리한다', async () => {
   const store = new MemoryStore()
-  const runId = await store.startRun('cron')
+  const runId = await store.startRun('collect', 'cron')
   const node = createDiscoverNode({ store, source: fakeSource([ref('1')]) })
   const summary = await runNode(
     node,

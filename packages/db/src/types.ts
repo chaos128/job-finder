@@ -4,6 +4,7 @@ export type ScoreStatus = 'ok' | 'failed'
 export type Scorer = 'routine' | 'api'
 export type NotificationStatus = 'pending' | 'sent' | 'failed'
 export type RunTrigger = 'cron' | 'manual' | 'cli'
+export type RunPipeline = 'collect' | 'notify'
 
 export interface SearchParams {
   jobGroupId: string

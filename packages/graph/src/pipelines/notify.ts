@@ -27,7 +27,7 @@ export async function runNotify(
   trigger: RunTrigger,
 ): Promise<NotifyReport> {
   const { store, mailer } = deps
-  const runId = await store.startRun(trigger)
+  const runId = await store.startRun('notify', trigger)
 
   try {
     const profile = await store.getProfile()
