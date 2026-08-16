@@ -1,6 +1,6 @@
 import type { Store } from './store.js'
 import type {
-  DashboardCursor, DashboardFilters, DashboardPage,
+  DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
@@ -207,6 +207,33 @@ export class MemoryStore implements Store {
       rows,
       nextCursor: rows.length === params.limit && last
         ? { total: last.total, jobId: last.jobId } : null,
+    }
+  }
+
+  async getJobDetail(jobId: string): Promise<ScoredJob | null> {
+    const job = this.jobs.get(jobId)
+    const score = this.scores.get(jobId)
+    return job && score ? { job, score } : null
+  }
+
+  async setJobBookmarked(jobId: string, bookmarked: boolean) {
+    const job = this.jobs.get(jobId)
+    if (job) this.jobs.set(jobId, { ...job, bookmarked })
+  }
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    // SupabaseStore와 같은 필터 — 실패한 채점(status: 'failed')이 남긴 자리표시자
+    // 값(rubricVersion 'v1', scoredAt 0)이 분포와 최종 채점 시각을 오염시키면 안 된다.
+    const scores = [...this.scores.values()].filter((s) => s.status === 'ok')
+    const rubricVersions: Record<string, number> = {}
+    for (const s of scores) rubricVersions[s.rubricVersion] = (rubricVersions[s.rubricVersion] ?? 0) + 1
+    const scoredAt = scores.map((s) => s.scoredAt).sort()
+    return {
+      totalJobs: this.jobs.size,
+      scoredJobs: scores.length,
+      lastScoredAt: scoredAt[scoredAt.length - 1] ?? null,
+      rubricVersions,
+      recentRuns: [...this.runs].reverse().slice(0, 5).map((r) => ({ ...r })),
     }
   }
 

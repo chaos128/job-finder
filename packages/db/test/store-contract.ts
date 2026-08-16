@@ -223,10 +223,50 @@ export function describeStoreContract(
       ])
       expect((await store.listDashboardJobs({ limit: 10, minScore: 60 })).rows).toHaveLength(1)
 
+      await store.setJobBookmarked(created[1]!.id, true)
+      const bookmarked = await store.listDashboardJobs({ limit: 10, bookmarkedOnly: true })
+      expect(bookmarked.rows.map((r) => r.jobId)).toEqual([created[1]!.id])
+
       const ntf = await store.createNotification([created[0]!.id])
       await store.markNotificationSent(ntf.id)
       const unnotified = await store.listDashboardJobs({ limit: 10, unnotifiedOnly: true })
       expect(unnotified.rows.map((r) => r.total)).toEqual([50])
+    })
+
+    test('getJobDetail은 공고 전문과 점수를 함께 준다', async () => {
+      const [created] = await seedScored(store, [{ ext: '1', total: 88 }])
+      const detail = await store.getJobDetail(created!.id)
+      expect(detail?.job.companyName).toBe('ACME')
+      expect(detail?.score.total).toBe(88)
+      expect(detail?.score.reasoning).toBe('r1')
+      expect(await store.getJobDetail('없는-id')).toBeNull()
+    })
+
+    test('setJobBookmarked는 값을 뒤집고 목록에 반영된다', async () => {
+      const [created] = await seedScored(store, [{ ext: '1', total: 70 }])
+      await store.setJobBookmarked(created!.id, true)
+      expect((await store.listDashboardJobs({ limit: 10 })).rows[0]!.bookmarked).toBe(true)
+      await store.setJobBookmarked(created!.id, false)
+      expect((await store.listDashboardJobs({ limit: 10 })).rows[0]!.bookmarked).toBe(false)
+    })
+
+    test('getDashboardStats는 건수와 마지막 채점, 루브릭 분포를 준다', async () => {
+      await seedScored(store, [{ ext: '1', total: 70 }, { ext: '2', total: 80 }])
+      await store.insertJobs([job('3')])
+      const stats = await store.getDashboardStats()
+      expect(stats.totalJobs).toBe(3)
+      expect(stats.scoredJobs).toBe(2)
+      expect(stats.rubricVersions).toEqual({ v3: 2 })
+      expect(stats.lastScoredAt).not.toBeNull()
+    })
+
+    test('startRun은 pipeline을 기록하고 getDashboardStats가 되돌려준다', async () => {
+      await store.startRun('collect', 'cron')
+      await store.startRun('notify', 'manual')
+      const stats = await store.getDashboardStats()
+      const pipelines = stats.recentRuns.map((r) => r.pipeline)
+      expect(pipelines).toContain('collect')
+      expect(pipelines).toContain('notify')
     })
 
     // status 필터를 빠뜨려도 위 테스트들은 다 통과한다 — 실패한 채점은 애초에

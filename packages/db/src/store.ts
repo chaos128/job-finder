@@ -1,5 +1,5 @@
 import type {
-  DashboardCursor, DashboardFilters, DashboardPage,
+  DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source,
 } from './types.js'
@@ -34,6 +34,9 @@ export interface Store {
   listDashboardJobs(
     params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
   ): Promise<DashboardPage>
+  getJobDetail(jobId: string): Promise<ScoredJob | null>
+  getDashboardStats(): Promise<DashboardStats>
+  setJobBookmarked(jobId: string, bookmarked: boolean): Promise<void>
 
   // ── 관측
   /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */

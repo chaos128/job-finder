@@ -146,3 +146,12 @@ export interface DashboardPage {
   rows: DashboardRow[]
   nextCursor: DashboardCursor | null
 }
+
+export interface DashboardStats {
+  totalJobs: number
+  scoredJobs: number
+  /** null이면 아직 한 건도 채점되지 않았다. */
+  lastScoredAt: string | null
+  rubricVersions: Record<string, number>
+  recentRuns: RunSummary[]
+}

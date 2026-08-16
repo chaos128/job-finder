@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Store } from './store.js'
 import type {
-  DashboardCursor, DashboardFilters, DashboardPage,
+  DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  NotifyRule, Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search,
+  NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source,
 } from './types.js'
 
@@ -108,6 +108,17 @@ function toJob(row: DigestJobRow & Partial<Pick<JobRow, DetailColumns>>): Job {
     detailError: row.detail_error,
     bookmarked: row.bookmarked,
     hidden: row.hidden,
+  }
+}
+
+/** listNotifyCandidates와 getJobDetail이 같은 scores 행 매핑을 공유한다. */
+function toScore(row: ScoreRow): Score {
+  return {
+    jobId: row.job_id, total: row.total, breakdown: row.breakdown,
+    reasoning: row.reasoning, scorer: row.scorer as ScoreInput['scorer'],
+    rubricVersion: row.rubric_version, status: row.status as Score['status'],
+    attempts: row.attempts, error: row.error,
+    scoredAt: row.scored_at, notifiedAt: row.notified_at,
   }
 }
 
@@ -259,16 +270,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
 
       return rows
         .filter((r) => r.jobs && !r.jobs.hidden)
-        .map((r) => ({
-          job: toJob(r.jobs),
-          score: {
-            jobId: r.job_id, total: r.total, breakdown: r.breakdown,
-            reasoning: r.reasoning, scorer: r.scorer as ScoreInput['scorer'],
-            rubricVersion: r.rubric_version, status: 'ok' as const,
-            attempts: r.attempts, error: r.error,
-            scoredAt: r.scored_at, notifiedAt: r.notified_at,
-          },
-        }))
+        .map((r) => ({ job: toJob(r.jobs), score: toScore(r) }))
     },
 
     async createNotification(jobIds: string[]): Promise<Notification> {
@@ -344,6 +346,45 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         rows,
         nextCursor: rows.length === params.limit && last
           ? { total: last.total, jobId: last.jobId } : null,
+      }
+    },
+
+    async getJobDetail(jobId: string): Promise<ScoredJob | null> {
+      const rows = unwrap<(ScoreRow & { jobs: JobRow })[]>(
+        await db.from('scores').select('*, jobs(*)').eq('job_id', jobId).limit(1),
+      )
+      const row = rows[0]
+      return row ? { job: toJob(row.jobs), score: toScore(row) } : null
+    },
+
+    async setJobBookmarked(jobId: string, bookmarked: boolean) {
+      const { error } = await db.from('jobs').update({ bookmarked }).eq('id', jobId)
+      if (error) throw new Error(error.message)
+    },
+
+    async getDashboardStats(): Promise<DashboardStats> {
+      const [jobCount, scoreRows, runRows] = await Promise.all([
+        db.from('jobs').select('*', { count: 'exact', head: true }),
+        db.from('scores').select('rubric_version, scored_at').eq('status', 'ok'),
+        db.from('runs').select('id, pipeline, trigger, started_at, ended_at')
+          .order('started_at', { ascending: false }).limit(5),
+      ])
+      const scores = unwrap<{ rubric_version: string; scored_at: string }[]>(scoreRows)
+      const rubricVersions: Record<string, number> = {}
+      for (const s of scores) rubricVersions[s.rubric_version] = (rubricVersions[s.rubric_version] ?? 0) + 1
+      const scoredAt = scores.map((s) => s.scored_at).sort()
+      return {
+        totalJobs: jobCount.count ?? 0,
+        scoredJobs: scores.length,
+        lastScoredAt: scoredAt[scoredAt.length - 1] ?? null,
+        rubricVersions,
+        recentRuns: unwrap<{
+          id: string; pipeline: RunPipeline | null; trigger: RunTrigger
+          started_at: string; ended_at: string | null
+        }[]>(runRows).map((r) => ({
+          id: r.id, pipeline: r.pipeline, trigger: r.trigger,
+          startedAt: r.started_at, endedAt: r.ended_at,
+        })),
       }
     },
 
