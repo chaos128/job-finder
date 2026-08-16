@@ -356,9 +356,13 @@ export function describeStoreContract(
       expect(rows.map((r) => r.jobId)).toEqual([created!.id])
     })
 
-    test('미채점 목록은 상한을 지킨다', async () => {
-      await store.insertJobs([job('1'), job('2'), job('3')])
-      expect(await store.listUnscoredJobs(2)).toHaveLength(2)
+    // toHaveLength(2)만 보면 최신 N건이나 무작위 N건, 심지어 일부 유실도 통과한다
+    // — 어떤 job이 남는지(가장 오래된 것부터)까지 확인해야 정렬과 상한을 함께
+    // 검증한 게 된다.
+    test('미채점 목록은 상한을 지키고 오래된 것부터 온다', async () => {
+      const created = await store.insertJobs([job('1'), job('2'), job('3')])
+      const rows = await store.listUnscoredJobs(2)
+      expect(rows.map((r) => r.jobId)).toEqual([created[0]!.id, created[1]!.id])
     })
   })
 }

@@ -49,10 +49,14 @@ export class MemoryStore implements Store {
         (j) => j.source === row.source && j.externalId === row.externalId,
       )
       if (exists) continue
+      const id = this.nextId('job')
       const job: Job = {
         ...row,
-        id: this.nextId('job'),
-        firstSeenAt: new Date(0).toISOString(),
+        id,
+        // 실 스토어처럼 삽입 순서대로 단조 증가해야 한다 — 전부 같은 값(과거엔
+        // epoch 고정)이면 listUnscoredJobs의 first_seen_at asc 정렬을 계약
+        // 테스트가 검증할 수 없다. seq는 nextId가 이미 증가시켜 놓았다.
+        firstSeenAt: new Date(this.seq * 1000).toISOString(),
         detailStatus: 'pending',
         detailAttempts: 0,
         detailError: null,

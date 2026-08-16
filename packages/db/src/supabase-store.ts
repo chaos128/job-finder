@@ -72,15 +72,11 @@ type DashboardJoinRow = {
   }
 }
 
-/**
- * scores.job_id가 jobs.id를 참조하는 PK/FK라 1:1이고, PostgREST는 매칭되는
- * 자식이 없으면 null을 준다(배열이 아니다 — 운영 DB로 직접 확인함, 아래
- * listUnscoredJobs 주석 참고).
- */
+/** jobs_unscored 뷰(0005 마이그레이션)의 컬럼. jobs.*와 같은 모양이지만 이 목록에는
+ *  네 컬럼만 있으면 된다. */
 type UnscoredJobRow = {
   id: string; company_name: string; position: string; url: string
   due_time: string | null; first_seen_at: string
-  scores: { status: string } | null
 }
 
 // scores.job_id is both primary key and FK -> jobs, so this is a 1:1
@@ -401,29 +397,26 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       // 단 채 그대로 돌아온다. 운영 DB(168/168 채점 완료 상태)에 직접
       // `jobs!left(scores).or('status.is.null,status.neq.ok', {referencedTable:'scores'})`를
       // 날려 확인했다 — 기대와 달리 0행이 아니라 (limit만큼) 행이 돌아왔고, 전부
-      // scores: null이었다(실제로는 모든 job에 status='ok' 행이 있는데도). 그래서
-      // 서버 필터를 믿지 않고 이 함수 안에서 직접 판정한다.
+      // scores: null이었다(실제로는 모든 job에 status='ok' 행이 있는데도).
       //
-      // 서버 limit도 못 쓴다 — 필터링이 fetch 이후에 일어나므로 limit건을 받았는데
-      // 그중 채점된 게 많으면 결과가 모자랄 수 있다. 넉넉히 받아 자른다. 하루치
-      // 신규 수집분은 적다는 전제(브리핑 참고)라 이 상한이면 충분하다.
-      const OVER_FETCH = Math.max(limit * 10, 500)
+      // 처음엔 이걸 "넉넉히 받아 JS에서 필터 후 자르기"로 우회했지만, 그러면
+      // first_seen_at 오름차순으로 서버 limit을 걸어야 해서 jobs가 그 상한을
+      // 넘어가면 "가장 오래된 N건" 안에서만 골라내는 꼴이 된다 — 이 기능이 정작
+      // 보여줘야 할, 방금 수집돼 아직 채점 안 된 *최신* 행이 상한 밖으로 밀려
+      // 조용히 빠진다(0건인데 실제로는 대기 중인 상태). jobs_needing_score
+      // (0001_init.sql)가 이미 같은 문제를 SQL 조건절로 풀어놓은 전례를 따라
+      // jobs_unscored 뷰(0005 마이그레이션)를 만들어 SQL에서 판정하게 했다 — 그
+      // 뷰가 이미 "미채점" 조건을 걸러 놓으므로 limit()이 진짜 상한이다.
       const rows = unwrap<UnscoredJobRow[]>(
-        await db.from('jobs')
-          .select<string, UnscoredJobRow>(
-            'id, company_name, position, url, due_time, first_seen_at, scores(status)',
-          )
-          .eq('hidden', false)
+        await db.from('jobs_unscored')
+          .select('id, company_name, position, url, due_time, first_seen_at')
           .order('first_seen_at', { ascending: true })
-          .limit(OVER_FETCH),
+          .limit(limit),
       )
-      return rows
-        .filter((r) => r.scores?.status !== 'ok')
-        .slice(0, limit)
-        .map((r) => ({
-          jobId: r.id, companyName: r.company_name, position: r.position,
-          url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
-        }))
+      return rows.map((r) => ({
+        jobId: r.id, companyName: r.company_name, position: r.position,
+        url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
+      }))
     },
 
     async getDashboardStats(): Promise<DashboardStats> {

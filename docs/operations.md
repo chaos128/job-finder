@@ -14,7 +14,17 @@ Supabase 대시보드 → SQL Editor에서 `packages/db/migrations/0002_notifica
 **영구 실패 알림 하나가 이후 모든 다이제스트를 막는 상태**가 그대로 유지된다.
 이 마이그레이션이 그 게이트를 푸는 유일한 수단이다.
 
-### 2. 발송 설정에 실제 값이 들어갔는지 확인
+### 2. `0005_jobs_unscored.sql` 적용 — **하드 블로커(미채점 토글)**
+
+Supabase 대시보드 → SQL Editor에서 `packages/db/migrations/0005_jobs_unscored.sql`을
+실행한다. `create or replace view`라 여러 번 돌려도 안전하다.
+
+적용 전에는 `/jobs`의 "미채점 포함" 토글이 존재하지 않는 `jobs_unscored` 뷰를 조회하려다
+PostgREST 404(관계 없음)를 받는다 — `loadUnscoredJobs` 서버 액션이 에러를 던지고
+`UnscoredList`가 에러 배너를 보여준다. 채점된 목록 자체는 이 뷰를 쓰지 않으므로 영향
+없다.
+
+### 3. 발송 설정에 실제 값이 들어갔는지 확인
 
 | 항목 | 확인 방법 | 비어 있으면 |
 | --- | --- | --- |
@@ -25,7 +35,7 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 (403 `validation_error`). 다른 주소로 받으려면 resend.com/domains에서 도메인을 검증하고
 `NOTIFY_FROM`을 그 도메인 주소로 지정해야 한다.
 
-### 3. Vercel 프로젝트 설정 — Root Directory
+### 4. Vercel 프로젝트 설정 — Root Directory
 
 **Settings → General → Root Directory 를 `apps/web` 으로 지정한다.**
 
@@ -41,7 +51,7 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
   `webpack.resolve.extensionAlias`가 ESM `.js`→`.ts` 해석을 푸는데 Turbopack은 이 콜백을
   무시한다. 워크스페이스 패키지 import가 전부 깨진다.
 
-### 4. Vercel 환경변수
+### 5. Vercel 환경변수
 
 `CRON_SECRET`, `SCORING_TOKEN`, `SUPABASE_*`, `RESEND_API_KEY`, `NOTIFY_FROM`.
 `lib/guard.ts`는 토큰이 없으면 **500으로 닫는다**(열어두지 않는다). 누락되면 모든 라우트가 죽는다.
@@ -49,7 +59,7 @@ Resend에서 도메인을 검증하지 않으면 계정 소유자 본인 주소 
 크론은 UTC로 돈다. `vercel.json`의 `0 16 * * *`(collect) / `0 0 * * *`(notify)는
 각각 KST 01:00 / 09:00이다.
 
-### 5. 첫 notify 실행은 눈으로 확인
+### 6. 첫 notify 실행은 눈으로 확인
 
 `0002` 적용 후 첫 실행의 응답과 Vercel 로그를 한 번은 직접 본다.
 
