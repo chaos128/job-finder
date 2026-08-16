@@ -1,3 +1,4 @@
+import { compareDashboardOrder } from './dashboard-order.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
@@ -9,22 +10,6 @@ import type {
 const MAX_ATTEMPTS = 3
 /** SupabaseStore의 listNotifyCandidates와 같은 상한 — 두 구현이 같은 계약을 지켜야 한다. */
 const NOTIFY_CANDIDATE_LIMIT = 200
-
-/**
- * 대시보드 정렬의 유일한 정의: hidden(제외됨) 오름차순 → total 내림차순 →
- * jobId 내림차순. 제외된 공고는 점수와 무관하게 맨 뒤로 간다. SupabaseStore의
- * order()/or() 커서 로직과 반드시 같은 결과를 내야 한다(계약 테스트가 확인한다).
- * 정렬(.sort)과 커서 판정(다음 페이지 대상 여부) 양쪽에 이 함수 하나만 써서,
- * 두 로직이 따로 구현되며 어긋나는 걸 막는다.
- */
-function compareDashboardOrder(
-  a: { hidden: boolean; total: number; jobId: string },
-  b: { hidden: boolean; total: number; jobId: string },
-): number {
-  if (a.hidden !== b.hidden) return a.hidden ? 1 : -1
-  if (a.total !== b.total) return b.total - a.total
-  return a.jobId < b.jobId ? 1 : -1
-}
 
 export class MemoryStore implements Store {
   private seq = 0

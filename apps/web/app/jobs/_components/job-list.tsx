@@ -1,6 +1,10 @@
 'use client'
 
 import type { DashboardCursor, DashboardFilters, DashboardRow } from '@job-finder/db'
+// 정렬 규칙은 서버(스토어)와 반드시 같아야 한다. 배럴('@job-finder/db')을 값으로
+// import하면 supabase-store가 브라우저 번들에 딸려 오므로, 의존성 없는 서브패스로
+// 그 함수 하나만 가져온다 — 복제해두면 어긋나는 순간 페이징이 깨진다.
+import { compareDashboardOrder } from '@job-finder/db/dashboard-order'
 import { Badge, Button, cn, Input } from '@job-finder/ui'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { loadMoreJobs, toggleBookmark, toggleHidden } from '../actions'
@@ -8,17 +12,16 @@ import { JobCard } from './job-card'
 import { UnscoredList } from './unscored-list'
 
 /**
- * packages/db/src/memory-store.ts의 compareDashboardOrder와 반드시 같은 결과를
- * 내야 한다(hidden asc → total desc → jobId desc). getStore()는 서버 전용(서비스
- * 롤 키)이라 '@job-finder/db' 값을 이 클라이언트 컴포넌트에서 import할 수 없으므로
- * — 지금까지 이 파일이 그 패키지에서 타입만 가져오던 관례를 깨게 된다 — 정렬
- * 로직만 그대로 복제한다. 제외 토글이 서버 응답을 기다리지 않고 그 자리에서
- * 카드를 맨 뒤로 보내되, 새로고침 후 서버가 주는 순서와 어긋나지 않게 하기 위함이다.
+ * 다음 페이지를 이어붙인다. 단순 concat이 아니라 jobId로 합치고 다시 정렬하는
+ * 이유: hidden은 정렬 키라서, 이미 받아온 공고를 제외하면 그 공고가 뒤쪽
+ * (hidden 구간)으로 이동해 아직 안 받은 페이지 범위 안으로 들어간다. 그러면
+ * 서버가 같은 행을 한 번 더 내려주고 concat은 그대로 중복 렌더한다(운영 168건 ·
+ * PAGE_SIZE 100에서 재현: 카드 하나 제외 후 스크롤하면 rows 169 / unique 168,
+ * 같은 jobId가 두 자리에 뜨고 key가 충돌한다). 제외 해제도 같은 이유로 겹친다.
  */
-function compareDashboardOrder(a: DashboardRow, b: DashboardRow): number {
-  if (a.hidden !== b.hidden) return a.hidden ? 1 : -1
-  if (a.total !== b.total) return b.total - a.total
-  return a.jobId < b.jobId ? 1 : -1
+function mergeRows(prev: DashboardRow[], next: DashboardRow[]): DashboardRow[] {
+  const seen = new Set(prev.map((r) => r.jobId))
+  return [...prev, ...next.filter((r) => !seen.has(r.jobId))].sort(compareDashboardOrder)
 }
 
 export function JobList({ initialRows, initialCursor }: {
@@ -77,7 +80,7 @@ export function JobList({ initialRows, initialCursor }: {
         try {
           const page = await loadMoreJobs(filters, cursor)
           if (myGeneration === generation.current) {
-            setRows((prev) => [...prev, ...page.rows])
+            setRows((prev) => mergeRows(prev, page.rows))
             setCursor(page.nextCursor)
           }
         } catch (e) {

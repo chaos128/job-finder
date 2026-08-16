@@ -18,8 +18,10 @@ export function JobCard({ row, onToggleBookmark, onToggleHidden }: {
         'flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm',
         // 제외된 카드는 비활성처럼 보이게: 회색 배경 + 텍스트 흐림 + 클릭 대상이
         // 아님을 알리는 opacity. 실제로 pointer-events를 막지는 않는다 — 되돌리기
-        // 버튼(과 상세 링크)은 계속 눌러야 하기 때문이다.
-        row.hidden && 'bg-neutral-100 opacity-60 grayscale',
+        // 버튼(과 상세 링크)은 계속 눌러야 하기 때문이다. neutral-200인 이유:
+        // opacity-60이 배경색까지 페이지(#fafafa)와 섞어버려서, neutral-100은
+        // 합성 결과가 #f7f7f7 — 정상 카드(흰색)와 달리 "회색"으로 안 읽힌다.
+        row.hidden && 'bg-neutral-200 opacity-60 grayscale',
       )}
     >
       <div className={cn('w-14 shrink-0 text-3xl font-bold tabular-nums', scoreBandClass(row.total))}>
