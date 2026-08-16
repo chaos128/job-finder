@@ -4,6 +4,8 @@
 -- 도착하면 빈 값이 생기지 않는다. jobs에 두면 신규 수집분이 별도 생성 패스를
 -- 돌리기 전까지 비고, 수동 단계가 하나 더 는다.
 --
--- nullable인 이유: 이 컬럼이 생기기 전에 채점된 행이 이미 있다. 그 행들은
--- 백필로 채운다. 신규 제출은 스키마가 필수로 강제한다.
-alter table scores add column if not exists summary text;
+-- not null default ''인 이유: reasoning(0001_init.sql)과 같은 관례다. 이 컬럼이
+-- 생기기 전에 채점된 행은 요약이 "없다"가 아니라 이 테이블에서 "아직 계산되지
+-- 않았다"를 뜻하는 빈 문자열로 채워진다 — null로 갈라치는 대신 기존 컬럼들과
+-- 같은 자리표시자를 쓴다. 신규 제출은 스키마가 필수(길이 1~140)로 강제한다.
+alter table scores add column if not exists summary text not null default '';

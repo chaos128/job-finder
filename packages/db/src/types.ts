@@ -75,11 +75,7 @@ export interface ScoreInput {
   rubricVersion: string
 }
 
-// summary만 ScoreInput과 다르게(nullable로) 재선언해야 해서 extends 대신 Omit + 교차.
-// 신규 제출은 스키마가 summary를 필수로 강제하지만, 저장된 행은 0004 이전에 채점된
-// 것이거나 채점 실패 placeholder일 수 있어 null일 수 있다.
-export interface Score extends Omit<ScoreInput, 'summary'> {
-  summary: string | null
+export interface Score extends ScoreInput {
   status: ScoreStatus
   attempts: number
   error: string | null
@@ -130,8 +126,8 @@ export interface DashboardRow {
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null
-  /** 채점 시 함께 받은 JD 한 줄 요약. 0004 이전 행은 null. */
-  summary: string | null
+  /** 채점 시 함께 받은 JD 한 줄 요약. 0004 이전 행은 빈 문자열(reasoning과 같은 관례). */
+  summary: string
 }
 
 /**

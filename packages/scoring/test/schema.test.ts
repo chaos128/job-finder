@@ -72,6 +72,15 @@ test('reasoning이 비면 거부한다', () => {
   expect(() => scoreSubmissionSchema.parse([{ ...valid, reasoning: '' }])).toThrow()
 })
 
+test('summary가 없으면 거부한다', () => {
+  const { summary: _drop, ...rest } = valid
+  expect(() => scoreSubmissionSchema.parse([rest])).toThrow()
+})
+
+test('summary가 140자를 넘으면 거부한다', () => {
+  expect(() => scoreSubmissionSchema.parse([{ ...valid, summary: '가'.repeat(141) }])).toThrow()
+})
+
 test('jobId가 uuid가 아니면 거부한다', () => {
   expect(() => scoreSubmissionSchema.parse([{ ...valid, jobId: 'nope' }])).toThrow()
 })

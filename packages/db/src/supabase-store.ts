@@ -54,7 +54,7 @@ interface ProfileRow {
 
 interface ScoreRow {
   job_id: string; total: number; breakdown: Record<string, number>
-  reasoning: string; summary: string | null; scorer: string; rubric_version: string
+  reasoning: string; summary: string; scorer: string; rubric_version: string
   status: string; attempts: number; error: string | null
   scored_at: string; notified_at: string | null
 }
@@ -65,7 +65,7 @@ interface NotificationRow {
 
 type DashboardJoinRow = {
   total: number; breakdown: Record<string, number>; notified_at: string | null
-  summary: string | null
+  summary: string
   jobs: {
     id: string; company_name: string; position: string; url: string
     due_time: string | null; bookmarked: boolean; hidden: boolean

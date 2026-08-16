@@ -124,7 +124,7 @@ export class MemoryStore implements Store {
       total: prev?.total ?? 0,
       breakdown: prev?.breakdown ?? {},
       reasoning: prev?.reasoning ?? '',
-      summary: prev?.summary ?? null,
+      summary: prev?.summary ?? '',
       scorer: prev?.scorer ?? 'routine',
       rubricVersion: prev?.rubricVersion ?? 'v1',
       status: 'failed',
