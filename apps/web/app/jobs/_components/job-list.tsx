@@ -16,9 +16,10 @@ export function JobList({ initialRows, initialCursor }: {
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const sentinel = useRef<HTMLDivElement>(null)
-  // 점수 목록의 질의(필터·커서·무한스크롤)와는 완전히 무관하다 — 켜지면 아래에
-  // 별도 구간을 하나 더 붙일 뿐이다.
-  const [showUnscored, setShowUnscored] = useState(false)
+  // 점수 목록의 질의(필터·커서·무한스크롤)와는 완전히 무관하다 — 켜지면 점수 목록
+  // 대신 미채점 구간만 보여준다. 점수 목록의 상태는 그대로 남아 있어서 끄면 재조회 없이
+  // 돌아온다.
+  const [unscoredOnly, setUnscoredOnly] = useState(false)
 
   // 필터가 바뀔 때마다 늘어나는 세대 번호. cancelled 플래그 하나로는 필터→필터
   // 경쟁만 막힌다 — 스크롤 응답이 필터 교체 "이후"에 도착하는 역방향 경쟁은 못
@@ -90,6 +91,9 @@ export function JobList({ initialRows, initialCursor }: {
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        {/* 최소 점수·북마크·미발송은 전부 점수가 있어야 뜻이 생기는 조건이라, 미채점만
+            볼 때는 숨긴다. 남겨두면 눌러도 아무 일이 없어 고장으로 읽힌다. */}
+        {!unscoredOnly && (<>
         <label className="flex items-center gap-2 text-neutral-600">
           최소 점수
           <Input
@@ -127,45 +131,52 @@ export function JobList({ initialRows, initialCursor }: {
         >
           미발송만
         </button>
+        </>)}
         <button
           type="button"
-          aria-pressed={showUnscored}
-          onClick={() => setShowUnscored((v) => !v)}
+          aria-pressed={unscoredOnly}
+          onClick={() => setUnscoredOnly((v) => !v)}
           className={cn(
             'h-9 rounded-full border px-4 font-medium transition-colors',
-            showUnscored
+            unscoredOnly
               ? 'border-neutral-900 bg-neutral-900 text-white'
               : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
           )}
         >
-          미채점 포함
+          미채점만
         </button>
-        <Badge className="ml-auto">{rows.length}건</Badge>
+        {!unscoredOnly && <Badge className="ml-auto">{rows.length}건</Badge>}
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {error}
-          <Button
-            type="button" variant="outline" size="sm" className="ml-3"
-            onClick={() => setFilters((f) => ({ ...f }))}
-          >
-            다시 시도
-          </Button>
-        </div>
+      {/* 에러 배너·목록·센티넬은 전부 점수 목록에 속한다. 미채점만 볼 때 같이 띄우면
+          어느 목록의 상태인지 알 수 없다 — UnscoredList가 자기 에러를 따로 보여준다. */}
+      {unscoredOnly ? (
+        <UnscoredList />
+      ) : (
+        <>
+          {error && (
+            <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+              {error}
+              <Button
+                type="button" variant="outline" size="sm" className="ml-3"
+                onClick={() => setFilters((f) => ({ ...f }))}
+              >
+                다시 시도
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <JobCard key={row.jobId} row={row} onToggleBookmark={onToggleBookmark} />
+            ))}
+          </div>
+
+          <div ref={sentinel} className="h-8 text-center text-sm text-neutral-400">
+            {pending ? '불러오는 중…' : cursor ? '' : '끝'}
+          </div>
+        </>
       )}
-
-      <div className="space-y-3">
-        {rows.map((row) => (
-          <JobCard key={row.jobId} row={row} onToggleBookmark={onToggleBookmark} />
-        ))}
-      </div>
-
-      <div ref={sentinel} className="h-8 text-center text-sm text-neutral-400">
-        {pending ? '불러오는 중…' : cursor ? '' : '끝'}
-      </div>
-
-      {showUnscored && <UnscoredList />}
     </section>
   )
 }
