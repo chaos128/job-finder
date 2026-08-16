@@ -18,8 +18,13 @@ export function JobCard({ row, onToggleBookmark }: {
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         <Link href={`/jobs/${row.jobId}`} className="block hover:underline">
-          <div className="text-sm text-neutral-500">{row.companyName}</div>
-          <div className="truncate text-lg font-medium">{row.position}</div>
+          {/* 회사명을 muted 캡션으로 두면 목록을 훑을 때 안 읽힌다 — 어느 회사인지가
+              포지션만큼 중요한 판단 재료라 굵기와 크기를 올렸다. */}
+          <div className="text-base font-semibold text-neutral-800">{row.companyName}</div>
+          {/* truncate를 쓰지 않는다. 포지션 제목에 괄호로 도메인이 붙는 경우가 많은데
+              (예: "Frontend Engineer (MLOps, Vision AI Platform)") 잘리면 그 부분이
+              통째로 사라져 무슨 일인지 알 수 없다. 줄바꿈시킨다. */}
+          <div className="text-lg font-medium">{row.position}</div>
         </Link>
         {/* 축별 구성 세그먼트 바 — 숫자를 읽기 전에 매치의 모양이 먼저 보이게 한다.
             트랙 100%가 만점 100점이라 채워진 길이 자체가 총점이고, 색 구간이 축 배분이다. */}
