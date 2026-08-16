@@ -1,8 +1,9 @@
 'use client'
 
-import { Badge, Button } from '@job-finder/ui'
+import { Badge, Button, cn } from '@job-finder/ui'
 import type { DashboardRow } from '@job-finder/db'
 import Link from 'next/link'
+import { AXIS_BAR_COLOR, scoreBandClass } from './score-visuals'
 
 const AXES = ['stack', 'role', 'domain', 'growth', 'conditions'] as const
 
@@ -12,16 +13,28 @@ export function JobCard({ row, onToggleBookmark }: {
 }) {
   return (
     <div className="flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="w-14 shrink-0 text-3xl font-bold tabular-nums">{row.total}</div>
+      <div className={cn('w-14 shrink-0 text-3xl font-bold tabular-nums', scoreBandClass(row.total))}>
+        {row.total}
+      </div>
       <div className="min-w-0 flex-1 space-y-2">
         <Link href={`/jobs/${row.jobId}`} className="block hover:underline">
           <div className="text-sm text-neutral-500">{row.companyName}</div>
           <div className="truncate text-lg font-medium">{row.position}</div>
         </Link>
-        <p className="line-clamp-2 text-sm text-neutral-600">{row.summary}</p>
+        {/* 축별 구성 세그먼트 바 — 숫자를 읽기 전에 매치의 모양이 먼저 보이게 한다.
+            트랙 100%가 만점 100점이라 채워진 길이 자체가 총점이고, 색 구간이 축 배분이다. */}
+        <div className="flex h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+          {AXES.map((a) => (
+            <div key={a} className={cn('h-full', AXIS_BAR_COLOR[a])} style={{ width: `${row.breakdown[a] ?? 0}%` }} />
+          ))}
+        </div>
+        {/* line-clamp-6: 실측(168건) summary 길이가 170~313자로 좁게 몰려 있어(p95 277,
+            최댓값 313) 6줄이면 사실상 전부 잘리지 않는다. 그래도 상한은 남긴다 — 이례적으로
+            긴 값이 들어와도 카드 하나가 목록 리듬을 무너뜨릴 만큼 길어지지 않게. */}
+        <p className="line-clamp-6 text-sm text-neutral-600">{row.summary}</p>
         <div className="flex flex-wrap gap-1.5">
           {AXES.map((a) => (
-            <Badge key={a}>
+            <Badge key={a} variant={a}>
               {a} {row.breakdown[a] ?? 0}
             </Badge>
           ))}

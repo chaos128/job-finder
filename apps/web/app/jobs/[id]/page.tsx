@@ -1,8 +1,10 @@
 import { getStore } from '@/lib/store'
+import { cn } from '@job-finder/ui'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BookmarkToggle } from '../_components/bookmark-toggle'
 import { ScoreBars } from '../_components/score-bars'
+import { scoreBandClass } from '../_components/score-visuals'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +32,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <div className="text-sm text-neutral-500">{job.companyName}</div>
         <h1 className="text-2xl font-bold">{job.position}</h1>
         <div className="flex items-center gap-4 pt-2">
-          {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums) */}
-          <span className="text-3xl font-semibold tabular-nums">{score.total}</span>
+          {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums). 색 밴드는 카드와 동일 기준. */}
+          <span className={cn('text-3xl font-semibold tabular-nums', scoreBandClass(score.total))}>
+            {score.total}
+          </span>
           {/* 북마크 여부는 공고 전문을 읽고 나서 정해진다 — 목록보다 여기가 제자리다. */}
           <BookmarkToggle jobId={job.id} initial={job.bookmarked} />
           <a href={job.url} target="_blank" rel="noreferrer"
