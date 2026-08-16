@@ -16,32 +16,47 @@ export function JobList({ initialRows, initialCursor }: {
   const [pending, startTransition] = useTransition()
   const sentinel = useRef<HTMLDivElement>(null)
 
+  // 필터가 바뀔 때마다 늘어나는 세대 번호. cancelled 플래그 하나로는 필터→필터
+  // 경쟁만 막힌다 — 스크롤 응답이 필터 교체 "이후"에 도착하는 역방향 경쟁은 못
+  // 막는다(io.disconnect()는 이미 시작된 startTransition 본문을 취소하지 못한다).
+  // 두 effect가 응답을 적용하기 전에 자기가 시작될 때의 세대와 지금 세대를 대조해,
+  // 어느 쪽이 먼저 끝나든 최신 필터가 아닌 응답은 버린다.
+  const generation = useRef(0)
+  // 첫 마운트는 서버 컴포넌트가 이미 기본 필터(빈 필터)로 첫 페이지를 받아왔으므로
+  // 건너뛴다 — 안 그러면 페이지뷰마다 같은 조회가 중복으로 나간다.
+  const isFirstRun = useRef(true)
+
   // 필터가 바뀌면 서버에서 처음부터 다시 받는다 — 커서 페이징이라 클라이언트에서 좁힐 수 없다.
   useEffect(() => {
-    let cancelled = false
+    if (isFirstRun.current) { isFirstRun.current = false; return }
+    const myGeneration = ++generation.current
     startTransition(async () => {
       try {
         const page = await loadMoreJobs(filters)
-        if (!cancelled) { setRows(page.rows); setCursor(page.nextCursor); setError(null) }
+        if (myGeneration === generation.current) {
+          setRows(page.rows); setCursor(page.nextCursor); setError(null)
+        }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        if (myGeneration === generation.current) setError(e instanceof Error ? e.message : String(e))
       }
     })
-    return () => { cancelled = true }
   }, [filters])
 
   useEffect(() => {
     const el = sentinel.current
     if (!el || !cursor || pending) return
+    const myGeneration = generation.current
     const io = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return
       startTransition(async () => {
         try {
           const page = await loadMoreJobs(filters, cursor)
-          setRows((prev) => [...prev, ...page.rows])
-          setCursor(page.nextCursor)
+          if (myGeneration === generation.current) {
+            setRows((prev) => [...prev, ...page.rows])
+            setCursor(page.nextCursor)
+          }
         } catch (e) {
-          setError(e instanceof Error ? e.message : String(e))
+          if (myGeneration === generation.current) setError(e instanceof Error ? e.message : String(e))
         }
       })
     })

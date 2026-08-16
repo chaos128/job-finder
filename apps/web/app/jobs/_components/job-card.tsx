@@ -1,3 +1,5 @@
+'use client'
+
 import { Badge, Button } from '@job-finder/ui'
 import type { DashboardRow } from '@job-finder/db'
 import Link from 'next/link'

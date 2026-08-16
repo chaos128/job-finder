@@ -12,21 +12,29 @@ function todayInKst(now: Date): string {
 }
 
 /**
+ * dueTime이 없는 공고(상시채용)는 만료로 치지 않는다. 대시보드의 "알림 대기" 카운트도
+ * 이 함수를 써야 한다 — 여기서만 마감을 걸러내면 대시보드는 몇 달 전 마감된 공고까지
+ * 세어 실제로 발송될 양과 어긋난다.
+ */
+export function isExpired(dueTime: string | null, now: Date = new Date()): boolean {
+  return dueTime !== null && dueTime < todayInKst(now)
+}
+
+/**
  * 절대 임계값이 아니라 상대 순위로 자른다 — 채점 눈금이 흔들려도 알림 양이 튀지 않는다.
  *
  * 마감이 지난 공고는 제외한다. 후보는 발송될 때까지 계속 남으므로(notified_at이
  * NULL인 동안 매번 다시 조회된다), 거르지 않으면 몇 달 전 마감된 공고가 후보 풀에
- * 영원히 떠다니다 상위권이 빌 때 추천된다. due_time이 없는 공고(상시채용)는 남긴다.
+ * 영원히 떠다니다 상위권이 빌 때 추천된다.
  */
 export function selectForDigest(
   candidates: ScoredJob[],
   rule: NotifyRule,
   now: Date = new Date(),
 ): ScoredJob[] {
-  const today = todayInKst(now)
   return [...candidates]
     .filter((c) => c.score.total >= rule.minScore)
-    .filter((c) => !c.job.dueTime || c.job.dueTime >= today)
+    .filter((c) => !isExpired(c.job.dueTime, now))
     .sort((a, b) => b.score.total - a.score.total)
     .slice(0, rule.topN)
 }
