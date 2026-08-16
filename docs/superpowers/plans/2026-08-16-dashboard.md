@@ -108,23 +108,7 @@ alter table runs add column if not exists pipeline text;
 export type RunPipeline = 'collect' | 'notify'
 ```
 
-- [ ] **Step 3: 계약 테스트 작성 (실패 확인용)**
-
-`packages/db/test/store-contract.ts`의 `describe` 블록 안 끝에 추가:
-
-```ts
-    test('startRun은 pipeline을 기록하고 getDashboardStats가 되돌려준다', async () => {
-      await store.startRun('collect', 'cron')
-      await store.startRun('notify', 'manual')
-      const stats = await store.getDashboardStats()
-      expect(stats.recentRuns.map((r) => r.pipeline)).toContain('collect')
-      expect(stats.recentRuns.map((r) => r.pipeline)).toContain('notify')
-    })
-```
-
-이 테스트는 Task 3의 `getDashboardStats`에 의존한다. **Task 1에서는 이 테스트를 넣지 말고**, `startRun` 시그니처만 바꾼 뒤 기존 테스트가 통과하는지로 검증한다. 위 테스트는 Task 3 Step 1에서 추가한다.
-
-- [ ] **Step 4: Store 포트 시그니처 변경**
+- [ ] **Step 3: Store 포트 시그니처 변경**
 
 `packages/db/src/store.ts:33`을 교체:
 
@@ -135,7 +119,7 @@ export type RunPipeline = 'collect' | 'notify'
 
 같은 파일 상단 import에 `RunPipeline`을 추가한다.
 
-- [ ] **Step 5: MemoryStore 구현 — run을 실제로 저장**
+- [ ] **Step 4: MemoryStore 구현 — run을 실제로 저장**
 
 `packages/db/src/memory-store.ts`. 지금은 id만 반환하고 아무것도 저장하지 않는다. Task 3의 통계가 이 데이터를 읽으므로 저장하도록 바꾼다.
 
@@ -162,7 +146,7 @@ export type RunPipeline = 'collect' | 'notify'
 
 import에 `RunPipeline`을 추가한다.
 
-- [ ] **Step 6: SupabaseStore 구현**
+- [ ] **Step 5: SupabaseStore 구현**
 
 `packages/db/src/supabase-store.ts:305-310` 교체:
 
@@ -177,14 +161,14 @@ import에 `RunPipeline`을 추가한다.
 
 import에 `RunPipeline`을 추가한다.
 
-- [ ] **Step 7: 호출부 4곳 수정**
+- [ ] **Step 6: 호출부 4곳 수정**
 
 - `packages/graph/src/pipelines/collect.ts:32` → `await store.startRun('collect', trigger)`
 - `packages/graph/src/pipelines/notify.ts:30` → `await store.startRun('notify', trigger)`
 - `packages/graph/test/discover.test.ts:141` → `await store.startRun('collect', 'cron')`
 - `packages/graph/test/runner.test.ts:12` → `await store.startRun('collect', 'cron')`
 
-- [ ] **Step 8: 테스트와 타입 검사**
+- [ ] **Step 7: 테스트와 타입 검사**
 
 ```bash
 pnpm test && pnpm typecheck
@@ -192,7 +176,7 @@ pnpm test && pnpm typecheck
 
 Expected: 112개 통과, typecheck 7/7.
 
-- [ ] **Step 9: 커밋**
+- [ ] **Step 8: 커밋**
 
 ```bash
 git add -A
@@ -316,10 +300,6 @@ const seedScored = async (store: Store, specs: { ext: string; total: number }[])
       ])
       expect((await store.listDashboardJobs({ limit: 10, minScore: 60 })).rows).toHaveLength(1)
 
-      await store.setJobBookmarked(created[1]!.id, true)
-      const marked = await store.listDashboardJobs({ limit: 10, bookmarkedOnly: true })
-      expect(marked.rows.map((r) => r.total)).toEqual([50])
-
       const ntf = await store.createNotification([created[0]!.id])
       await store.markNotificationSent(ntf.id)
       const unnotified = await store.listDashboardJobs({ limit: 10, unnotifiedOnly: true })
@@ -329,7 +309,7 @@ const seedScored = async (store: Store, specs: { ext: string; total: number }[])
 
 `DashboardCursor`, `DashboardPage`를 파일 상단 import에 추가한다.
 
-`setJobBookmarked`는 Task 3에서 만든다. **이 태스크에서는 세 번째 테스트의 북마크 부분을 빼고** 최소 점수와 미발송만 검증한 뒤, Task 3에서 북마크 검증을 추가한다.
+세 번째 테스트에 `bookmarkedOnly` 검증이 없는 것은 의도적이다 — `setJobBookmarked`는 Task 3에서 만들고, 그 검증도 Task 3에서 붙인다.
 
 - [ ] **Step 3: 테스트 실패 확인**
 
