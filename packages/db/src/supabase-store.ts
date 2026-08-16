@@ -3,7 +3,7 @@ import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
+  NotifyPendingRow, NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source, UnscoredJobs,
 } from './types.js'
 
@@ -15,6 +15,9 @@ const MAX_ATTEMPTS = 3
  * 상위 200만 받아도 selectForDigest(topN 3)의 결과는 같다.
  */
 const NOTIFY_CANDIDATE_LIMIT = 200
+
+/** 알림 대기 건수용 — 세는 데 필요한 두 칸만. */
+const NOTIFY_PENDING_SELECT = 'total, jobs!inner(due_time)' as const
 
 /**
  * 다이제스트가 쓰는 것만 가져온다 — JD 본문(intro/requirements/…)과
@@ -292,6 +295,22 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       return rows
         .filter((r) => r.jobs && !r.jobs.hidden)
         .map((r) => ({ job: toJob(r.jobs), score: toScore(r) }))
+    },
+
+    async listNotifyPending(): Promise<NotifyPendingRow[]> {
+      // listNotifyCandidates와 같은 대상·같은 상한. 다른 건 컬럼뿐이다 — 저쪽은
+      // 다이제스트 본문을 만들어야 해서 공고를 통째로 받는데(실측 134건 320ms),
+      // 여기는 건수만 세면 되므로 두 칸만 받는다. hidden 제외는 `!inner` embed에
+      // 건 평범한 필터라 부모까지 걸러진다(`!left`와 다르다 — listUnscoredJobs 주석 참고).
+      // select에 `*`가 없어 postgrest-js가 1:1 embed를 배열로 추론한다 —
+      // DASHBOARD_SELECT와 같은 이유로 결과 타입을 직접 지정해 우회한다.
+      type Row = { total: number; jobs: { due_time: string | null } }
+      const rows = unwrap<Row[]>(
+        await db.from('scores').select<typeof NOTIFY_PENDING_SELECT, Row>(NOTIFY_PENDING_SELECT)
+          .eq('status', 'ok').is('notified_at', null).eq('jobs.hidden', false)
+          .order('total', { ascending: false }).limit(NOTIFY_CANDIDATE_LIMIT),
+      )
+      return rows.map((r) => ({ total: r.total, dueTime: r.jobs.due_time }))
     },
 
     async createNotification(jobIds: string[]): Promise<Notification> {

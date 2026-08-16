@@ -8,21 +8,21 @@ export const dynamic = 'force-dynamic'
 
 export default async function Page() {
   const store = getStore()
-  // "알림 대기"는 notify가 실제로 고를 대상을 세야 한다 — 그래서 notify와 같은 질의
-  // (listNotifyCandidates: status ok · 미발송 · hidden 제외)를 그대로 쓰고, 남은 두
+  // "알림 대기"는 notify가 실제로 고를 대상을 세야 한다 — 그래서 notify 후보와 같은
+  // 대상(status ok · 미발송 · hidden 제외)을 주는 listNotifyPending을 쓰고, 남은 두
   // 조건만 selectForDigest와 똑같이 여기서 적용한다(topN은 안 자른다 — 대기 총량이라).
   // 예전엔 listDashboardJobs를 필터 조합으로 흉내 냈는데, hidden 제외가 빠져 있어
   // 따로 걸러야 했고 무엇보다 profile을 기다렸다가 나가는 순차 질의였다. 함수는
   // icn1, DB는 서울이라 한 왕복이 곧 지연이므로 한 웨이브로 모은다.
-  const [stats, first, profile, candidates] = await Promise.all([
+  const [stats, first, profile, pending] = await Promise.all([
     store.getDashboardStats(),
     store.listDashboardJobs({ limit: PAGE_SIZE }),
     store.getProfile(),
-    store.listNotifyCandidates(),
+    store.listNotifyPending(),
   ])
   const now = new Date()
-  const pendingCount = candidates.filter(
-    (c) => c.score.total >= profile.notifyRule.minScore && !isExpired(c.job.dueTime, now),
+  const pendingCount = pending.filter(
+    (p) => p.total >= profile.notifyRule.minScore && !isExpired(p.dueTime, now),
   ).length
 
   return (

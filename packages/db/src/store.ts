@@ -1,6 +1,6 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  Job, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
   Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source, UnscoredJobs,
 } from './types.js'
 
@@ -36,6 +36,12 @@ export interface Store {
   ): Promise<DashboardPage>
   getJobDetail(jobId: string): Promise<ScoredJob | null>
   getDashboardStats(): Promise<DashboardStats>
+  /**
+   * listNotifyCandidates와 같은 대상(status ok · 미발송 · 제외 안 됨)을 같은 상한으로
+   * 주되, 세는 데 필요한 두 컬럼만 준다. 남은 조건(minScore·만료)은 selectForDigest와
+   * 같게 호출자가 적용한다 — 만료 기준(KST 오늘)이 SQL로 새어 나가지 않게.
+   */
+  listNotifyPending(): Promise<NotifyPendingRow[]>
   setJobBookmarked(jobId: string, bookmarked: boolean): Promise<void>
   setJobHidden(jobId: string, hidden: boolean): Promise<void>
   /**

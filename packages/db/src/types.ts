@@ -157,6 +157,16 @@ export interface DashboardPage {
   nextCursor: DashboardCursor | null
 }
 
+/**
+ * "알림 대기" 건수를 세는 데 필요한 최소 컬럼. 같은 대상을 listNotifyCandidates로도
+ * 셀 수 있지만 그건 발송용이라 공고 전문에 가까운 컬럼을 다 끌고 온다 — 실측
+ * 134건에 320ms로, /jobs 첫 응답 전체(356ms)를 혼자 잡아먹었다.
+ */
+export interface NotifyPendingRow {
+  total: number
+  dueTime: string | null
+}
+
 export interface DashboardStats {
   totalJobs: number
   scoredJobs: number

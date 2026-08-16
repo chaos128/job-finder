@@ -2,7 +2,7 @@ import { compareDashboardOrder } from './dashboard-order.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  Job, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
   UnscoredJobs,
 } from './types.js'
@@ -158,6 +158,12 @@ export class MemoryStore implements Store {
     return out
       .sort((a, b) => b.score.total - a.score.total)
       .slice(0, NOTIFY_CANDIDATE_LIMIT)
+  }
+
+  async listNotifyPending(): Promise<NotifyPendingRow[]> {
+    // listNotifyCandidates와 같은 대상·같은 상한이어야 한다. 컬럼만 줄인다.
+    return (await this.listNotifyCandidates())
+      .map(({ job, score }) => ({ total: score.total, dueTime: job.dueTime }))
   }
 
   async createNotification(jobIds: string[]) {

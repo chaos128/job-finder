@@ -1,6 +1,12 @@
 // 'use server' 파일은 async 함수만 export할 수 있어(Next 15 제약) actions.ts에 못 둔다.
 // page.tsx와 actions.ts가 같은 페이지 크기를 써야 하므로 별도 파일로 뺀다.
-export const PAGE_SIZE = 100
+// 100이었을 때 첫 화면이 카드 100장이었다 — HTML 477KB, DOM 3015노드(Lighthouse가
+// 과다로 보는 1400을 두 배 넘긴다). 화면에 보이는 건 네댓 장인데 나머지 95장을
+// 서버에서 렌더하고 클라이언트에서 하이드레이트하는 값을 첫 페인트가 다 낸다.
+// 20인 이유: 10이면 168건을 다 훑는 데 왕복이 17번이라 스크롤 중 "불러오는 중"이
+// 계속 뜬다. 20이면 8번이고, 카드 높이(~250px) 기준 첫 페이지가 화면 다섯 개 분량이라
+// 센티넬이 바로 보이지도 않는다.
+export const PAGE_SIZE = 20
 // 미채점 목록은 페이징이 없다 — 상한만 걸고, 이 값에서 잘렸다는 사실은 헤더가
 // 총량과 함께 밝힌다(listUnscoredJobs가 total을 따로 준다).
 export const UNSCORED_LIMIT = 100

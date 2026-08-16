@@ -119,6 +119,34 @@ export function describeStoreContract(
       expect(candidates.map((c) => c.score.total)).toEqual([90, 80, 70])
     })
 
+    // 대시보드의 "알림 대기" 건수를 이걸로 센다 — 후보 목록과 대상이 어긋나면
+    // 실제로는 발송되지 않을 건수를 보여주게 된다. 컬럼만 다르고 대상은 같아야 한다.
+    test('알림 대기 축약 목록은 후보 목록과 같은 대상·같은 순서다', async () => {
+      // dueTime은 호출자가 만료를 판정하는 유일한 재료다 — 값이 그대로 실려야 한다.
+      const inserted = await store.insertJobs([
+        { ...job('1'), dueTime: '2026-09-01' }, job('2'), { ...job('3'), dueTime: '2026-08-20' },
+      ])
+      for (const [i, total] of [70, 90, 80].entries()) {
+        await store.saveJobDetail(inserted[i]!.id, {
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.saveScore({
+          jobId: inserted[i]!.id, total, breakdown: {},
+          reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
+        })
+      }
+      // 제외된 공고는 발송되지 않으므로 양쪽 모두에서 빠져야 한다.
+      await store.setJobHidden(inserted[1]!.id, true)
+
+      const candidates = await store.listNotifyCandidates()
+      const pending = await store.listNotifyPending()
+      expect(pending.map((p) => p.total)).toEqual(candidates.map((c) => c.score.total))
+      expect(pending.map((p) => p.total)).toEqual([80, 70])
+      expect(pending.map((p) => p.dueTime)).toEqual(['2026-08-20', '2026-09-01'])
+      expect(pending.map((p) => p.dueTime)).toEqual(candidates.map((c) => c.job.dueTime))
+    })
+
     test('발송 표시된 job은 알림 후보에서 빠진다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
