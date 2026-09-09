@@ -460,5 +460,98 @@ export function describeStoreContract(
       expect(rows).toHaveLength(2)
       expect(total).toBe(3)
     })
+
+    describe('회사 별점 (Blind)', () => {
+      test('조회 대상은 별점 행이 없는 회사다 — 확정된 회사는 다시 집지 않는다', async () => {
+        await store.insertJobs([
+          { ...job('1'), companyName: 'ACME' },
+          { ...job('2'), companyName: 'ACME' },
+          { ...job('3'), companyName: '보노보노' },
+        ])
+        // 같은 회사가 공고 두 건이어도 한 번만 나와야 한다.
+        expect((await store.listCompaniesNeedingRating(10, 30)).sort()).toEqual(['ACME', '보노보노'])
+
+        await store.saveCompanyRating({
+          companyName: 'ACME', status: 'ok', rating: 3.4,
+          blindName: 'ACME', blindUrl: 'https://www.teamblind.com/kr/company/ACME/',
+        })
+        expect(await store.listCompaniesNeedingRating(10, 30)).toEqual(['보노보노'])
+      })
+
+      // 미등록도 확정된 답이다. 실패로 다루면 실측 4곳 중 1곳을 매 실행이 다시 조회한다.
+      test('Blind 미등록으로 확정한 회사도 다시 집지 않는다', async () => {
+        await store.insertJobs([{ ...job('1'), companyName: '없는회사' }])
+        await store.saveCompanyRating({ companyName: '없는회사', status: 'not_found' })
+        expect(await store.listCompaniesNeedingRating(10, 30)).toEqual([])
+      })
+
+      test('staleDays가 지나면 다시 조회 대상이 된다', async () => {
+        await store.insertJobs([{ ...job('1'), companyName: 'ACME' }])
+        await store.saveCompanyRating({
+          companyName: 'ACME', status: 'ok', rating: 3.4,
+          blindName: 'ACME', blindUrl: 'https://www.teamblind.com/kr/company/ACME/',
+        })
+        // staleDays=0이면 방금 저장한 것도 낡은 것으로 친다 — 시계를 조작하지 않고
+        // 경계를 확인하는 방법이다.
+        expect(await store.listCompaniesNeedingRating(10, 0)).toEqual(['ACME'])
+      })
+
+      test('별점은 목록과 상세 양쪽에 같은 값으로 실린다', async () => {
+        const [created] = await store.insertJobs([{ ...job('1'), companyName: 'ACME' }])
+        await store.saveJobDetail(created!.id, {
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.saveScore({
+          jobId: created!.id, total: 80, breakdown: {},
+          reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
+        })
+        await store.saveCompanyRating({
+          companyName: 'ACME', status: 'ok', rating: 3.4,
+          blindName: 'ACME Inc.', blindUrl: 'https://www.teamblind.com/kr/company/ACME/',
+        })
+
+        const { rows } = await store.listDashboardJobs({ limit: 10 })
+        expect(rows[0]!.blind).toEqual({
+          rating: 3.4, blindName: 'ACME Inc.',
+          blindUrl: 'https://www.teamblind.com/kr/company/ACME/',
+        })
+        const detail = await store.getJobDetail(created!.id)
+        expect(detail!.blind).toEqual(rows[0]!.blind)
+      })
+
+      // 미등록 회사는 화면에 아무것도 그리지 않는다 — 그 판단의 근거가 null이다.
+      test('미등록 회사의 별점은 null이다', async () => {
+        const [created] = await store.insertJobs([{ ...job('1'), companyName: '없는회사' }])
+        await store.saveJobDetail(created!.id, {
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.saveScore({
+          jobId: created!.id, total: 80, breakdown: {},
+          reasoning: '', summary: '', scorer: 'routine', rubricVersion: 'v1',
+        })
+        await store.saveCompanyRating({ companyName: '없는회사', status: 'not_found' })
+
+        const { rows } = await store.listDashboardJobs({ limit: 10 })
+        expect(rows[0]!.blind).toBeNull()
+        expect((await store.getJobDetail(created!.id))!.blind).toBeNull()
+      })
+
+      // 네트워크 한 번 튄 것이 멀쩡한 별점을 지우면 안 된다.
+      test('조회 실패는 이미 확정된 별점을 덮지 않는다', async () => {
+        await store.insertJobs([{ ...job('1'), companyName: 'ACME' }])
+        await store.saveCompanyRating({
+          companyName: 'ACME', status: 'ok', rating: 3.4,
+          blindName: 'ACME', blindUrl: 'https://www.teamblind.com/kr/company/ACME/',
+        })
+        await store.recordCompanyRatingFailure('ACME', 'boom')
+
+        const { rows } = await store.listDashboardJobs({ limit: 10 })
+        // 점수가 없어 목록에는 안 뜨므로 조회 대상 목록으로 확인한다.
+        void rows
+        expect(await store.listCompaniesNeedingRating(10, 30)).toEqual([])
+      })
+    })
   })
 }

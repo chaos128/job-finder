@@ -48,6 +48,21 @@ routine 프롬프트: [docs/routine-prompt.md](docs/routine-prompt.md)
 **단, 이 보장은 순차 재실행에만 적용된다.** 겹치는 동시 실행(cron과 `/api/run`)은
 보호되지 않는다.
 
+### 회사 별점은 Blind HTML을 긁어 온다
+
+`packages/sources/src/blind/index.ts`가 teamblind.com 검색 결과를 파싱한다. 공개 API가
+없어 마크업(`class="name"` 앵커 + 뒤따르는 `class="star"` 스팬)에 의존한다 — 마크업이
+바뀌면 `packages/sources/test/blind.test.ts`의 실제 응답 픽스처가 먼저 깨져야 한다.
+**파싱 실패와 "Blind 미등록"을 구분하지 않으므로**, 이 테스트가 통과하는 한에서만
+"별점이 안 보인다 = 그 회사가 Blind에 없다"로 읽을 수 있다.
+
+회사명 매칭은 완전하지 않다(실측 30곳 중 22곳, 73%). `searchCandidates`가 원문 →
+괄호 앞 → 괄호 안 순으로 시도해 끌어올린 값이다. 미등록으로 확정된 회사도 행으로
+남긴다 — 안 그러면 매 실행이 없는 회사를 영원히 다시 조회한다.
+
+별점은 **채점에 반영하지 않는다.** 루브릭을 건드리면 기존 전량을 재채점해야 하고,
+커버리지가 73%라 없는 회사가 일괄 감점되는 왜곡이 생긴다.
+
 ### 노드는 절대 throw하지 않는다
 
 `packages/graph/src/core/node.ts`의 `Node<In,Out>`는 `NodeResult`를 반환한다

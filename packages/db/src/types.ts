@@ -88,6 +88,28 @@ export interface ScoredJob {
   score: Score
 }
 
+/**
+ * Blind(teamblind.com)에 등록된 회사의 별점. 미등록 회사는 이 값이 null이고
+ * 화면에 아무것도 그리지 않는다 — 실측 커버리지가 73%라, 없는 쪽을 표시하면
+ * 목록 넷 중 하나가 "없음" 배지로 덮인다.
+ */
+export interface CompanyRating {
+  rating: number
+  /** Blind가 매칭한 회사명. 원문과 다를 수 있다(에스케이일렉링크 → SK일렉링크). */
+  blindName: string
+  blindUrl: string
+}
+
+/** 별점 수집 노드가 한 회사에 대해 알아낸 결과. status로 미등록까지 확정해 기록한다. */
+export type CompanyRatingResult =
+  | { companyName: string; status: 'ok'; rating: number; blindName: string; blindUrl: string }
+  | { companyName: string; status: 'not_found' }
+
+/** getJobDetail 전용. ScoredJob에 넣지 않는 이유는 notify 경로가 별점을 쓰지 않기 때문이다. */
+export interface JobDetail extends ScoredJob {
+  blind: CompanyRating | null
+}
+
 export interface NotifyRule {
   topN: number
   minScore: number
@@ -130,6 +152,8 @@ export interface DashboardRow {
   notifiedAt: string | null
   /** 채점 시 함께 받은 JD 요약(약 세 문장). 0004 이전 행은 빈 문자열(reasoning과 같은 관례). */
   summary: string
+  /** Blind 별점. 미등록이거나 아직 조회 전이면 null. */
+  blind: CompanyRating | null
 }
 
 /**

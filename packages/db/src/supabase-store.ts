@@ -3,6 +3,7 @@ import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  CompanyRating, CompanyRatingResult, JobDetail,
   NotifyPendingRow, NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source, UnscoredJobs,
 } from './types.js'
@@ -15,6 +16,12 @@ const MAX_ATTEMPTS = 3
  * 상위 200만 받아도 selectForDigest(topN 3)의 결과는 같다.
  */
 const NOTIFY_CANDIDATE_LIMIT = 200
+
+interface CompanyRatingRow {
+  company_name: string; status: string
+  rating: number | string | null; blind_name: string | null; blind_url: string | null
+  fetched_at: string
+}
 
 /** 알림 대기 건수용 — 세는 데 필요한 두 칸만. */
 const NOTIFY_PENDING_SELECT = 'total, jobs!inner(due_time)' as const
@@ -161,6 +168,38 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
   const db: SupabaseClient = createClient(url, serviceKey, {
     auth: { persistSession: false },
   })
+
+  /**
+   * 회사명 → 별점. company_ratings를 jobs에 embed하지 않고 따로 물어 JS에서 잇는 이유:
+   * PostgREST의 embed는 FK 관계를 요구하는데, 여기 조인 키는 FK가 아닌 company_name
+   * 텍스트다. jobs에 FK를 걸려면 모든 회사가 company_ratings에 먼저 있어야 해서
+   * 순서가 뒤집힌다. 함수는 icn1, DB도 서울이라 왕복 하나가 15ms 남짓이다.
+   */
+  async function fetchRatings(companyNames: string[]): Promise<Map<string, CompanyRating>> {
+    const uniq = [...new Set(companyNames)]
+    if (uniq.length === 0) return new Map()
+    const res = await db.from('company_ratings')
+      .select('company_name, status, rating, blind_name, blind_url, fetched_at')
+      .in('company_name', uniq).eq('status', 'ok')
+    if (res.error) {
+      // 여기서 throw하면 별점 표가 없다는 이유로 목록 전체가 500이 된다.
+      // 마이그레이션은 사람이 손으로 적용하는데 배포는 push하면 자동이라, 표가 아직
+      // 없는 구간이 실제로 생긴다(0006). 별점은 장식이고 목록이 제품이므로 그 구간에는
+      // 별점만 빠진 채로 뜨게 둔다 — 노드가 처음 도는 순간부터 자연히 채워진다.
+      return new Map()
+    }
+    const rows = res.data ?? []
+    const out = new Map<string, CompanyRating>()
+    for (const r of rows) {
+      // numeric은 postgrest-js가 문자열로 줄 수 있다(정밀도 손실 방지). 숫자로 고정한다.
+      const rating = Number(r.rating)
+      if (!Number.isFinite(rating)) continue
+      out.set(r.company_name, {
+        rating, blindName: r.blind_name ?? '', blindUrl: r.blind_url ?? '',
+      })
+    }
+    return out
+  }
 
   return {
     async listEnabledSearches(): Promise<Search[]> {
@@ -409,21 +448,28 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (!cursorHidden && rows.length < params.limit) {
         rows = rows.concat(await bucket(true, params.limit - rows.length))
       }
-      const last = rows[rows.length - 1]
+      // 페이지가 확정된 뒤에 별점을 붙인다 — 버킷별로 물으면 왕복이 두 번 난다.
+      const ratings = await fetchRatings(rows.map((r) => r.companyName))
+      const withBlind = rows.map((r) => ({ ...r, blind: ratings.get(r.companyName) ?? null }))
+
+      const last = withBlind[withBlind.length - 1]
       return {
-        rows,
-        nextCursor: rows.length === params.limit && last
+        rows: withBlind,
+        nextCursor: withBlind.length === params.limit && last
           ? { hidden: last.hidden, total: last.total, jobId: last.jobId } : null,
       }
     },
 
-    async getJobDetail(jobId: string): Promise<ScoredJob | null> {
+    async getJobDetail(jobId: string): Promise<JobDetail | null> {
       if (!isUuid(jobId)) return null
       const rows = unwrap<(ScoreRow & { jobs: JobRow })[]>(
         await db.from('scores').select('*, jobs(*)').eq('job_id', jobId).limit(1),
       )
       const row = rows[0]
-      return row ? { job: toJob(row.jobs), score: toScore(row) } : null
+      if (!row) return null
+      const job = toJob(row.jobs)
+      const blind = (await fetchRatings([job.companyName])).get(job.companyName) ?? null
+      return { job, score: toScore(row), blind }
     },
 
     async setJobBookmarked(jobId: string, bookmarked: boolean) {
@@ -505,6 +551,77 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       }
     },
 
+    async listCompaniesNeedingRating(limit: number, staleDays: number): Promise<string[]> {
+      // 두 질의로 나눈다. jobs와 company_ratings 사이에 FK가 없어 PostgREST가
+      // anti-join(= 별점 행이 없는 회사)을 표현하지 못하기 때문이다. 회사 수가
+      // 수백 규모(운영 187곳)라 전량을 받아 JS에서 빼도 페이로드가 작다.
+      const jobRows = unwrap<Array<{ company_name: string }>>(
+        await db.from('jobs').select('company_name'),
+      )
+      const ratingRows = unwrap<Array<{ company_name: string; fetched_at: string }>>(
+        await db.from('company_ratings').select('company_name, fetched_at'),
+      )
+      const fetchedAt = new Map(ratingRows.map((r) => [r.company_name, r.fetched_at]))
+      const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000
+
+      return [...new Set(jobRows.map((r) => r.company_name))]
+        .filter((n) => {
+          const at = fetchedAt.get(n)
+          return at === undefined || Date.parse(at) <= cutoff
+        })
+        // 아직 조회한 적 없는 회사가 먼저, 그다음 오래된 순. MemoryStore와 같은 순서다.
+        .sort((a, b) => {
+          const ta = fetchedAt.get(a)
+          const tb = fetchedAt.get(b)
+          if (ta === tb) return 0
+          if (ta === undefined) return -1
+          if (tb === undefined) return 1
+          return ta < tb ? -1 : 1
+        })
+        .slice(0, limit)
+    },
+
+    async saveCompanyRating(result: CompanyRatingResult) {
+      // 두 분기의 모양을 하나로 고정한다 — 유니온으로 두면 postgrest-js의
+      // upsert 오버로드가 첫 분기 모양만 받아들여 타입 에러가 난다.
+      const row: {
+        company_name: string; status: string; rating: number | null
+        blind_name: string | null; blind_url: string | null
+        error: string | null; fetched_at: string
+      } = result.status === 'ok'
+        ? {
+          company_name: result.companyName, status: 'ok', rating: result.rating,
+          blind_name: result.blindName, blind_url: result.blindUrl,
+          error: null, fetched_at: new Date().toISOString(),
+        }
+        : {
+          company_name: result.companyName, status: 'not_found', rating: null,
+          blind_name: null, blind_url: null, error: null, fetched_at: new Date().toISOString(),
+        }
+      // attempts는 일부러 빼서 upsert가 기존 값을 보존하게 둔다(merge-duplicates는
+      // 생략한 컬럼을 건드리지 않는다). 성공했다고 실패 이력까지 지울 이유는 없다.
+      const { error } = await db.from('company_ratings')
+        .upsert(row, { onConflict: 'company_name' })
+      if (error) throw new Error(error.message)
+    },
+
+    async recordCompanyRatingFailure(companyName: string, message: string) {
+      const rows = unwrap<Array<{ attempts: number }>>(
+        await db.from('company_ratings').select('attempts').eq('company_name', companyName).limit(1),
+      )
+      // status와 fetched_at은 기존 행에 손대지 않는다. status를 건드리면 일시적
+      // 네트워크 실패 한 번이 멀쩡한 'ok' 별점을 'not_found'로 덮고, fetched_at을
+      // 올리면 staleDays 동안 재시도가 막힌다. 행이 없을 때만 두 값을 새로 넣되
+      // fetched_at은 과거 시각으로 둬 다음 실행이 곧바로 다시 집게 한다.
+      const { error } = await db.from('company_ratings').upsert({
+        company_name: companyName,
+        attempts: (rows[0]?.attempts ?? 0) + 1,
+        error: message,
+        ...(rows[0] ? {} : { status: 'not_found', fetched_at: new Date(0).toISOString() }),
+      }, { onConflict: 'company_name' })
+      if (error) throw new Error(error.message)
+    },
+
     async startRun(pipeline: RunPipeline, trigger: RunTrigger) {
       const row = unwrap<{ id: string }>(
         await db.from('runs').insert({ pipeline, trigger }).select('id').single(),
@@ -533,6 +650,10 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       const tables = [
         ['node_runs', 'id'], ['runs', 'id'], ['notifications', 'id'],
         ['scores', 'job_id'], ['search_hits', 'search_id'], ['jobs', 'id'], ['searches', 'id'],
+        // company_ratings는 FK가 없어 순서는 상관없지만, 빠뜨리면 테스트 사이에
+        // 별점이 남아 다음 테스트의 listCompaniesNeedingRating이 빈 목록을 본다.
+        // 키가 텍스트라 아래 uuid 리터럴과는 어차피 전부 다르다.
+        ['company_ratings', 'company_name'],
       ] as const
       for (const [table, key] of tables) {
         const { error } = await db.from(table).delete().neq(key, '00000000-0000-0000-0000-000000000000')

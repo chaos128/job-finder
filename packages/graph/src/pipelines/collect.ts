@@ -1,12 +1,13 @@
 import type { RunTrigger, Store } from '@job-finder/db'
-import type { JobSource } from '@job-finder/sources'
+import { findCompanyRating, type JobSource } from '@job-finder/sources'
+import { createCompanyRatingNode, type FindRating } from '../nodes/company-rating.js'
 import { createDiscoverNode } from '../nodes/discover.js'
 import { createFetchDetailNode } from '../nodes/fetch-detail.js'
 import { runNode, type FailedItem } from '../core/runner.js'
 
-/** failed 배열의 각 항목이 discover/fetchDetail 중 어느 단계에서 났는지 태그한다. */
+/** failed 배열의 각 항목이 discover/fetchDetail/companyRating 중 어느 단계에서 났는지 태그한다. */
 export interface CollectFailedItem extends FailedItem {
-  node: 'discover' | 'fetchDetail'
+  node: 'discover' | 'fetchDetail' | 'companyRating'
 }
 
 export interface CollectReport {
@@ -15,6 +16,8 @@ export interface CollectReport {
   found: number
   created: number
   detailed: number
+  /** Blind 별점을 새로 확정한 회사 수(미등록으로 확정한 것도 포함). */
+  rated: number
   /** true면 상세 조회가 limit을 다 채운 것 — 아직 남은 건이 더 있을 수 있다. */
   hitDetailLimit: boolean
   failed: CollectFailedItem[]
@@ -23,10 +26,27 @@ export interface CollectReport {
 /** 한 번의 호출에서 상세를 가져올 최대 건수. Vercel 함수 제한 안에 들어가도록 잡았다. */
 const DEFAULT_DETAIL_LIMIT = 50
 
+/**
+ * 한 번의 호출에서 별점을 조회할 최대 회사 수. 회사 하나에 Blind 검색 요청이
+ * 최대 3번(원문 → 괄호 제거 → 별칭) 나가므로 이 값이 곧 요청 상한 ×3이다.
+ * 첫 실행에는 187곳이 대기하지만 다 채우지 않는다 — 남은 회사는 다음 밤이
+ * 이어받는다(백로그가 자연히 빠지는, 채점 큐와 같은 방식).
+ */
+const DEFAULT_RATING_LIMIT = 40
+
+/** 별점 조회는 남의 서버를 두드리는 일이라 상세 조회보다 더 얌전하게 굴린다. */
+const RATING_CONCURRENCY = 2
+
+/**
+ * 별점을 다시 확인하는 주기. 회사 평점은 하루 단위로 흔들리는 값이 아니다.
+ * 백필 CLI가 "아직 남은 회사"를 셀 때도 같은 값을 써야 한다 — 그래서 export한다.
+ */
+export const RATING_STALE_DAYS = 30
+
 export async function runCollect(
-  deps: { store: Store; source: JobSource },
+  deps: { store: Store; source: JobSource; findRating?: FindRating },
   trigger: RunTrigger,
-  opts: { detailLimit?: number } = {},
+  opts: { detailLimit?: number; ratingLimit?: number } = {},
 ): Promise<CollectReport> {
   const { store, source } = deps
   const runId = await store.startRun('collect', trigger)
@@ -49,16 +69,29 @@ export async function runCollect(
       { runId, store },
     )
 
+    // 별점은 공고 수집과 독립이다 — 실패해도 수집 결과를 버리지 않는다.
+    const companies = await store.listCompaniesNeedingRating(
+      opts.ratingLimit ?? DEFAULT_RATING_LIMIT, RATING_STALE_DAYS,
+    )
+    const rated = await runNode(
+      createCompanyRatingNode({ store, findRating: deps.findRating ?? findCompanyRating }),
+      companies,
+      (name) => name,
+      { runId, store, concurrency: RATING_CONCURRENCY },
+    )
+
     return {
       runId,
       searches: searches.length,
       found: discovered.ok.reduce((sum, r) => sum + r.found, 0),
       created: discovered.ok.reduce((sum, r) => sum + r.created, 0),
       detailed: detailed.ok.length,
+      rated: rated.ok.length,
       hitDetailLimit: pending.length === detailLimit,
       failed: [
         ...discovered.failed.map((f): CollectFailedItem => ({ ...f, node: 'discover' })),
         ...detailed.failed.map((f): CollectFailedItem => ({ ...f, node: 'fetchDetail' })),
+        ...rated.failed.map((f): CollectFailedItem => ({ ...f, node: 'companyRating' })),
       ],
     }
   } finally {

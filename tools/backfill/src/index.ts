@@ -1,5 +1,5 @@
 import { createSupabaseStore } from '@job-finder/db'
-import { runCollect } from '@job-finder/graph'
+import { RATING_STALE_DAYS, runCollect } from '@job-finder/graph'
 import { createWantedSource, parseWantedSearchUrl } from '@job-finder/sources'
 
 const DETAIL_BATCH = 25
@@ -44,13 +44,15 @@ async function main() {
 
   let round = 0
   let totalDetailed = 0
+  let totalRated = 0
   while (true) {
     round++
     const report = await runCollect({ store, source }, 'cli', { detailLimit: DETAIL_BATCH })
     totalDetailed += report.detailed
+    totalRated += report.rated
     console.log(
       `[round ${round}] found=${report.found} created=${report.created} ` +
-      `detailed=${report.detailed} failed=${report.failed.length}`,
+      `detailed=${report.detailed} rated=${report.rated} failed=${report.failed.length}`,
     )
     for (const f of report.failed) {
       console.warn(`  ! [${f.node}] ${f.itemId}: ${f.code} ${f.message} (retryable=${f.retryable})`)
@@ -60,15 +62,21 @@ async function main() {
     // 남아있는데도 여기서 멈추게 된다. listJobsNeedingDetail로 실제로 남은 게
     // 있는지 확인하고 있으면 계속한다 — 재시도 상한(3회)에 도달한 건은 이 조회에서
     // 자동으로 빠지므로(detail_status='failed'로 전환), 루프는 결국 끝난다.
+    // 별점도 같은 이유로 남은 게 있으면 계속 돈다. cron은 밤마다 한 배치씩만
+    // 처리하지만(운영 187곳이면 닷새), 백필은 지금 다 채우라고 있는 CLI다.
+    // 미등록으로 확정된 회사는 이 조회에서 자동으로 빠지므로 루프는 끝난다.
     if (report.detailed === 0 && !report.hitDetailLimit) {
       const stillPending = await store.listJobsNeedingDetail(1)
-      if (stillPending.length === 0) break
+      const stillUnrated = await store.listCompaniesNeedingRating(1, RATING_STALE_DAYS)
+      if (stillPending.length === 0 && stillUnrated.length === 0) break
+      // 별점만 남았는데 그 라운드가 한 건도 확정하지 못했다면(전부 실패) 무한 루프다.
+      if (stillPending.length === 0 && report.rated === 0) break
     }
   }
 
   const stillPending = await store.listJobsNeedingDetail(1)
   console.log(
-    `\n백필 완료. 상세 처리 ${totalDetailed}건.\n` +
+    `\n백필 완료. 상세 처리 ${totalDetailed}건, 회사 별점 확정 ${totalRated}곳.\n` +
     (stillPending.length === 0
       ? '재시도 가능한 대기 건 없음.'
       : '재시도 가능한 대기 건이 남아있음 — pnpm backfill을 다시 실행하면 이어서 처리됩니다.') +

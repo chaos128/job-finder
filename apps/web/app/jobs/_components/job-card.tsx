@@ -2,8 +2,9 @@
 
 import { Badge, Button, cn } from "@job-finder/ui";
 import type { DashboardRow } from "@job-finder/db";
-import { Bookmark, RotateCcw, X } from "lucide-react";
+import { Bookmark, RotateCcw, X, } from "lucide-react";
 import Link from "next/link";
+import { BlindRating } from "./blind-rating";
 import { AXIS_BAR_COLOR, scoreBandClass } from "./score-visuals";
 
 const AXES = ["stack", "role", "domain", "growth", "conditions"] as const;
@@ -38,16 +39,27 @@ export function JobCard({
         {row.total}
       </div>
       <div className="min-w-0 flex-1 space-y-2">
-        <Link href={`/jobs/${row.jobId}`} className="block hover:underline">
+        {/* 회사명과 포지션을 한 Link로 묶지 않는다 — 회사명 옆의 Blind 배지가
+            자기 링크(a)를 가지는데, a 안의 a는 무효 마크업이라서다. */}
+        <div className="flex items-center gap-2">
           {/* 회사명을 muted 캡션으로 두면 목록을 훑을 때 안 읽힌다 — 어느 회사인지가
               포지션만큼 중요한 판단 재료라 굵기와 크기를 올렸다. */}
-          <div className="text-base font-semibold text-neutral-800">
+          <Link
+            href={`/jobs/${row.jobId}`}
+            className="min-w-0 text-base font-semibold text-neutral-800 hover:underline"
+          >
             {row.companyName}
-          </div>
-          {/* truncate를 쓰지 않는다. 포지션 제목에 괄호로 도메인이 붙는 경우가 많은데
-              (예: "Frontend Engineer (MLOps, Vision AI Platform)") 잘리면 그 부분이
-              통째로 사라져 무슨 일인지 알 수 없다. 줄바꿈시킨다. */}
-          <div className="text-lg font-medium">{row.position}</div>
+          </Link>
+          <BlindRating blind={row.blind} />
+        </div>
+        {/* truncate를 쓰지 않는다. 포지션 제목에 괄호로 도메인이 붙는 경우가 많은데
+            (예: "Frontend Engineer (MLOps, Vision AI Platform)") 잘리면 그 부분이
+            통째로 사라져 무슨 일인지 알 수 없다. 줄바꿈시킨다. */}
+        <Link
+          href={`/jobs/${row.jobId}`}
+          className="block text-lg font-medium hover:underline"
+        >
+          {row.position}
         </Link>
         {/* 축별 구성 세그먼트 바 — 숫자를 읽기 전에 매치의 모양이 먼저 보이게 한다.
             트랙 100%가 만점 100점이라 채워진 길이 자체가 총점이고, 색 구간이 축 배분이다. */}

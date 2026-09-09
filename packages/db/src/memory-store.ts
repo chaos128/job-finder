@@ -2,7 +2,8 @@ import { compareDashboardOrder } from './dashboard-order.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  Job, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
+  CompanyRating, CompanyRatingResult, DashboardRow,
+  Job, JobDetail, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
   UnscoredJobs,
 } from './types.js'
@@ -23,6 +24,12 @@ export class MemoryStore implements Store {
   /** notifications.attempts 컬럼에 대응. Notification 타입에는 노출하지 않는다. */
   private readonly notificationAttempts = new Map<string, number>()
   readonly nodeRuns: NodeRunEntry[] = []
+  /** company_ratings 표에 대응. 키는 jobs.company_name 원문. */
+  readonly companyRatings = new Map<string, {
+    status: 'ok' | 'not_found'
+    rating?: number; blindName?: string; blindUrl?: string
+    attempts: number; fetchedAt: string
+  }>()
   readonly runs: RunSummary[] = []
   profile: Profile = {
     resumeText: 'resume',
@@ -223,7 +230,7 @@ export class MemoryStore implements Store {
         jobId: job.id, companyName: job.companyName, position: job.position,
         url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked, hidden: job.hidden,
         total: score.total, breakdown: score.breakdown, notifiedAt: score.notifiedAt,
-        summary: score.summary,
+        summary: score.summary, blind: this.blindOf(job.companyName),
       }))
     const last = rows[rows.length - 1]
     return {
@@ -233,10 +240,17 @@ export class MemoryStore implements Store {
     }
   }
 
-  async getJobDetail(jobId: string): Promise<ScoredJob | null> {
+  async getJobDetail(jobId: string): Promise<JobDetail | null> {
     const job = this.jobs.get(jobId)
     const score = this.scores.get(jobId)
-    return job && score ? { job, score } : null
+    return job && score ? { job, score, blind: this.blindOf(job.companyName) } : null
+  }
+
+  /** SupabaseStore와 같은 규칙: status='ok'인 행만 별점으로 노출한다. */
+  private blindOf(companyName: string): CompanyRating | null {
+    const r = this.companyRatings.get(companyName)
+    if (!r || r.status !== 'ok' || r.rating === undefined) return null
+    return { rating: r.rating, blindName: r.blindName ?? '', blindUrl: r.blindUrl ?? '' }
   }
 
   async setJobBookmarked(jobId: string, bookmarked: boolean) {
@@ -278,6 +292,49 @@ export class MemoryStore implements Store {
       rubricVersions,
       recentRuns: [...this.runs].reverse().slice(0, 5).map((r) => ({ ...r })),
     }
+  }
+
+  async listCompaniesNeedingRating(limit: number, staleDays: number): Promise<string[]> {
+    const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000
+    const names = [...new Set([...this.jobs.values()].map((j) => j.companyName))]
+    return names
+      .filter((n) => {
+        const r = this.companyRatings.get(n)
+        return !r || Date.parse(r.fetchedAt) <= cutoff
+      })
+      // 오래된 것부터. 아직 행이 없는 회사가 가장 먼저다(SupabaseStore와 같은 순서).
+      .sort((a, b) => {
+        const ta = this.companyRatings.get(a)?.fetchedAt
+        const tb = this.companyRatings.get(b)?.fetchedAt
+        if (ta === tb) return 0
+        if (ta === undefined) return -1
+        if (tb === undefined) return 1
+        return ta < tb ? -1 : 1
+      })
+      .slice(0, limit)
+  }
+
+  async saveCompanyRating(result: CompanyRatingResult) {
+    const prev = this.companyRatings.get(result.companyName)
+    this.companyRatings.set(result.companyName, result.status === 'ok'
+      ? {
+        status: 'ok', rating: result.rating, blindName: result.blindName, blindUrl: result.blindUrl,
+        attempts: prev?.attempts ?? 0, fetchedAt: new Date().toISOString(),
+      }
+      : { status: 'not_found', attempts: prev?.attempts ?? 0, fetchedAt: new Date().toISOString() })
+  }
+
+  async recordCompanyRatingFailure(companyName: string, message: string) {
+    const prev = this.companyRatings.get(companyName)
+    // 실패는 fetchedAt을 올리지 않는다 — 올리면 staleDays 동안 재시도가 막힌다.
+    // 다음 실행이 곧바로 다시 집도록 두고 attempts만 센다.
+    this.companyRatings.set(companyName, {
+      status: prev?.status ?? 'not_found',
+      rating: prev?.rating, blindName: prev?.blindName, blindUrl: prev?.blindUrl,
+      attempts: (prev?.attempts ?? 0) + 1,
+      fetchedAt: prev?.fetchedAt ?? new Date(0).toISOString(),
+    })
+    void message
   }
 
   async startRun(pipeline: RunPipeline, trigger: RunTrigger) {

@@ -1,6 +1,7 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  Job, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
+  CompanyRatingResult, Job, JobDetail, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  NotifyPendingRow,
   Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source, UnscoredJobs,
 } from './types.js'
 
@@ -34,7 +35,7 @@ export interface Store {
   listDashboardJobs(
     params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
   ): Promise<DashboardPage>
-  getJobDetail(jobId: string): Promise<ScoredJob | null>
+  getJobDetail(jobId: string): Promise<JobDetail | null>
   getDashboardStats(): Promise<DashboardStats>
   /**
    * listNotifyCandidates와 같은 대상(status ok · 미발송 · 제외 안 됨)을 같은 상한으로
@@ -49,6 +50,20 @@ export interface Store {
    * 오래된 수집분부터 limit건까지 주고, 잘리기 전 총량을 함께 준다.
    */
   listUnscoredJobs(limit: number): Promise<UnscoredJobs>
+
+  // ── 회사 별점 (Blind)
+  /**
+   * 별점을 조회해야 하는 회사명. jobs에 있는 고유 회사 중 company_ratings 행이
+   * 없거나 fetched_at이 staleDays보다 오래된 것을 오래된 순으로 준다.
+   * 경계는 이상(<=)이다 — staleDays=0을 "전부 다시 조회"로 쓸 수 있게 하기 위함이고,
+   * 30일 같은 실제 값에서는 1밀리초 차이라 뜻이 달라지지 않는다.
+   * 상태 전이가 아니라 질의로 대상을 고르므로 몇 번을 다시 돌려도 안전하다.
+   */
+  listCompaniesNeedingRating(limit: number, staleDays: number): Promise<string[]>
+  /** 조회 결과를 확정 기록한다. 미등록(not_found)도 답이므로 행으로 남긴다. */
+  saveCompanyRating(result: CompanyRatingResult): Promise<void>
+  /** 조회 자체가 실패했을 때. attempts를 올리고 다음 실행이 다시 집도록 둔다. */
+  recordCompanyRatingFailure(companyName: string, message: string): Promise<void>
 
   // ── 관측
   /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */

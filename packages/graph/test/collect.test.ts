@@ -34,6 +34,12 @@ function source(refs: ExternalRef[]): JobSource {
   }
 }
 
+/**
+ * 별점 조회 스텁. 주입하지 않으면 collect가 실제 teamblind.com을 두드린다 —
+ * 테스트가 남의 서버와 네트워크에 의존하게 된다.
+ */
+const noRating = async () => null
+
 async function storeWithSearch() {
   const store = new MemoryStore()
   store.searches.push({
@@ -44,7 +50,7 @@ async function storeWithSearch() {
 
 test('검색부터 상세까지 한 번에 처리한다', async () => {
   const store = await storeWithSearch()
-  const report = await runCollect({ store, source: source([ref('1'), ref('2')]) }, 'cron')
+  const report = await runCollect({ store, source: source([ref('1'), ref('2')]), findRating: noRating }, 'cron')
 
   expect(report).toMatchObject({ searches: 1, found: 2, created: 2, detailed: 2 })
   expect(report.failed).toHaveLength(0)
@@ -54,8 +60,8 @@ test('검색부터 상세까지 한 번에 처리한다', async () => {
 test('두 번 돌려도 새로 생기는 것이 없다 (멱등)', async () => {
   const store = await storeWithSearch()
   const src = source([ref('1'), ref('2')])
-  await runCollect({ store, source: src }, 'cron')
-  const second = await runCollect({ store, source: src }, 'cron')
+  await runCollect({ store, source: src, findRating: noRating }, 'cron')
+  const second = await runCollect({ store, source: src, findRating: noRating }, 'cron')
 
   expect(second).toMatchObject({ created: 0, detailed: 0 })
   expect(store.jobs.size).toBe(2)
@@ -64,15 +70,15 @@ test('두 번 돌려도 새로 생기는 것이 없다 (멱등)', async () => {
 test('비활성 검색은 건너뛴다', async () => {
   const store = await storeWithSearch()
   store.searches[0]!.enabled = false
-  const report = await runCollect({ store, source: source([ref('1')]) }, 'cron')
+  const report = await runCollect({ store, source: source([ref('1')]), findRating: noRating }, 'cron')
   expect(report).toMatchObject({ searches: 0, found: 0, created: 0 })
 })
 
 test('run을 열고 닫으며 node_runs를 남긴다', async () => {
   const store = await storeWithSearch()
-  const report = await runCollect({ store, source: source([ref('1')]) }, 'manual')
+  const report = await runCollect({ store, source: source([ref('1')]), findRating: noRating }, 'manual')
   expect(report.runId).toMatch(/^run_/)
-  expect(store.nodeRuns.map((n) => n.node)).toEqual(['discover', 'fetchDetail'])
+  expect(store.nodeRuns.map((n) => n.node)).toEqual(['discover', 'fetchDetail', 'companyRating'])
 })
 
 test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed에 합쳐진다', async () => {
@@ -103,7 +109,7 @@ test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed
     },
   }
 
-  const report = await runCollect({ store, source: src }, 'cron')
+  const report = await runCollect({ store, source: src, findRating: noRating }, 'cron')
 
   // 실패한 검색 옆의 정상 검색은 그대로 상세 단계까지 도달한다 (job '2'는 성공)
   expect(report.detailed).toBe(1)
@@ -123,7 +129,7 @@ test('본문에서 에러가 나도 endRun은 호출된다', async () => {
   const endRunSpy = vi.spyOn(store, 'endRun')
   vi.spyOn(store, 'listEnabledSearches').mockRejectedValue(new Error('boom'))
 
-  await expect(runCollect({ store, source: source([]) }, 'cron')).rejects.toThrow('boom')
+  await expect(runCollect({ store, source: source([]), findRating: noRating }, 'cron')).rejects.toThrow('boom')
   expect(endRunSpy).toHaveBeenCalledTimes(1)
 })
 
@@ -131,10 +137,10 @@ test('detailLimit을 넘는 건은 다음 실행에서 처리되고, hitDetailLi
   const store = await storeWithSearch()
   const src = source([ref('1'), ref('2'), ref('3')])
 
-  const first = await runCollect({ store, source: src }, 'cron', { detailLimit: 1 })
+  const first = await runCollect({ store, source: src, findRating: noRating }, 'cron', { detailLimit: 1 })
   expect(first).toMatchObject({ created: 3, detailed: 1, hitDetailLimit: true })
 
-  const second = await runCollect({ store, source: src }, 'cron', { detailLimit: 1 })
+  const second = await runCollect({ store, source: src, findRating: noRating }, 'cron', { detailLimit: 1 })
   expect(second).toMatchObject({ created: 0, detailed: 1, hitDetailLimit: true })
 
   const okCount = [...store.jobs.values()].filter((j) => j.detailStatus === 'ok').length

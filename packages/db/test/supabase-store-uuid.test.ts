@@ -97,13 +97,17 @@ describe('SupabaseStore.listDashboardJobs의 hidden 버킷 이어붙이기', () 
     const urls = captureRequestUrlsSequential([
       JSON.stringify([dashboardRow('11111111-1111-1111-1111-111111111111', false)]),
       JSON.stringify([dashboardRow('22222222-2222-2222-2222-222222222222', true)]),
+      // 세 번째는 두 버킷을 이어붙인 뒤 회사 별점을 붙이는 질의다(company_ratings).
+      JSON.stringify([]),
     ])
     const page = await store.listDashboardJobs({ limit: 10 })
-    expect(urls).toHaveLength(2)
+    expect(urls).toHaveLength(3)
     expect(decodeURIComponent(urls[0]!)).toContain('jobs.hidden=eq.false')
     // 첫 버킷이 1행만 줘서 limit(10)에 9행 모자란다 — 두 번째 호출은 그 나머지만 청한다.
     expect(decodeURIComponent(urls[1]!)).toContain('jobs.hidden=eq.true')
     expect(decodeURIComponent(urls[1]!)).toContain('limit=9')
+    // 별점은 버킷별로 묻지 않는다 — 페이지가 확정된 뒤 한 번만 나가야 왕복이 안 는다.
+    expect(decodeURIComponent(urls[2]!)).toContain('company_ratings')
     // 합쳐진 결과의 hidden 플래그가 각 버킷의 값을 그대로 반영한다.
     expect(page.rows.map((r) => r.hidden)).toEqual([false, true])
   })

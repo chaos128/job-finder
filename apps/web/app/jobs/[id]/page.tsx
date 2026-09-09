@@ -2,6 +2,7 @@ import { getStore } from '@/lib/store'
 import { cn } from '@job-finder/ui'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { BlindRating } from '../_components/blind-rating'
 import { BookmarkToggle } from '../_components/bookmark-toggle'
 import { ScoreBars } from '../_components/score-bars'
 import { scoreBandClass } from '../_components/score-visuals'
@@ -22,7 +23,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const detail = await getStore().getJobDetail(id)
   if (!detail) notFound()
-  const { job, score } = detail
+  const { job, score, blind } = detail
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 p-6">
@@ -31,7 +32,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       <header className="space-y-1">
         {/* 카드와 같은 이유로 굵기·크기를 올렸다 — 어느 회사인지가 muted 캡션으로
             묻히면 안 된다. h1(text-2xl bold)이 여전히 우세하므로 위계는 유지된다. */}
-        <div className="text-lg font-semibold text-neutral-700">{job.companyName}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-lg font-semibold text-neutral-700">{job.companyName}</div>
+          <BlindRating blind={blind} size="md" />
+        </div>
         <h1 className="text-2xl font-bold">{job.position}</h1>
         <div className="flex items-center gap-4 pt-2">
           {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums). 색 밴드는 카드와 동일 기준. */}
