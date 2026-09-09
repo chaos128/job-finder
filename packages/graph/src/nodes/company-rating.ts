@@ -17,7 +17,7 @@ function messageOf(cause: unknown): string {
  *
  * 미등록(검색 결과에 회사가 없음)은 실패가 아니라 **확정된 답**이라 ok로 저장한다.
  * 실패로 다루면 매 실행이 없는 회사를 영원히 다시 조회하는데, 실측 커버리지가
- * 73%라 그 대상이 회사 넷 중 하나꼴이다.
+ * 56%라 그 대상이 회사 절반에 가깝다.
  */
 export function createCompanyRatingNode(
   deps: { store: Store; findRating: FindRating },

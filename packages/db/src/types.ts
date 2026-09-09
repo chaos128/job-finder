@@ -90,8 +90,8 @@ export interface ScoredJob {
 
 /**
  * Blind(teamblind.com)에 등록된 회사의 별점. 미등록 회사는 이 값이 null이고
- * 화면에 아무것도 그리지 않는다 — 실측 커버리지가 73%라, 없는 쪽을 표시하면
- * 목록 넷 중 하나가 "없음" 배지로 덮인다.
+ * 화면에 아무것도 그리지 않는다 — 실측 커버리지가 56%라, 없는 쪽을 표시하면
+ * 목록 절반이 "없음" 배지로 덮인다.
  */
 export interface CompanyRating {
   rating: number

@@ -13,7 +13,7 @@ create table if not exists company_ratings (
   company_name text primary key,
   -- 'ok'이면 rating이 채워져 있고, 'not_found'면 Blind에 그 회사가 없다는 뜻이다.
   -- 미등록도 하나의 확정된 답이라 행으로 남긴다 — 안 그러면 매 실행이 없는 회사를
-  -- 영원히 다시 조회한다(실측 커버리지 73%, 즉 4곳 중 1곳이 여기 해당한다).
+  -- 영원히 다시 조회한다(실측 커버리지 56%, 즉 열 곳 중 넷이 여기 해당한다).
   status       text not null default 'ok' check (status in ('ok', 'not_found')),
   rating       numeric(2,1),
   -- Blind가 매칭한 회사명. 원문과 다를 수 있어(에스케이일렉링크 → SK일렉링크) 그대로
