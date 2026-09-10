@@ -5,6 +5,7 @@ import type { DashboardRow } from "@job-finder/db";
 import { Bookmark, RotateCcw, X, } from "lucide-react";
 import Link from "next/link";
 import { BlindRating } from "./blind-rating";
+import { markDetailNavigation } from "./list-cache";
 import { AXIS_BAR_COLOR, scoreBandClass } from "./score-visuals";
 
 const AXES = ["stack", "role", "domain", "growth", "conditions"] as const;
@@ -46,6 +47,7 @@ export function JobCard({
               포지션만큼 중요한 판단 재료라 굵기와 크기를 올렸다. */}
           <Link
             href={`/jobs/${row.jobId}`}
+            onClick={markDetailNavigation}
             className="min-w-0 text-base font-semibold text-neutral-800 hover:underline"
           >
             {row.companyName}
@@ -57,6 +59,7 @@ export function JobCard({
             통째로 사라져 무슨 일인지 알 수 없다. 줄바꿈시킨다. */}
         <Link
           href={`/jobs/${row.jobId}`}
+          onClick={markDetailNavigation}
           className="block text-lg font-medium hover:underline"
         >
           {row.position}

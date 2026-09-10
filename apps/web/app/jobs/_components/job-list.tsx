@@ -9,6 +9,7 @@ import { Badge, Button, cn, Input } from '@job-finder/ui'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { loadMoreJobs, toggleBookmark, toggleHidden } from '../actions'
 import { JobCard } from './job-card'
+import { saveListCache, takeListCache } from './list-cache'
 import { UnscoredList } from './unscored-list'
 
 /**
@@ -27,9 +28,13 @@ function mergeRows(prev: DashboardRow[], next: DashboardRow[]): DashboardRow[] {
 export function JobList({ initialRows, initialCursor }: {
   initialRows: DashboardRow[]; initialCursor: DashboardCursor | null
 }) {
-  const [filters, setFilters] = useState<DashboardFilters>({})
-  const [rows, setRows] = useState(initialRows)
-  const [cursor, setCursor] = useState(initialCursor)
+  // 상세에 다녀온 것이면 떠날 때 담아둔 목록을 그대로 되살린다. 첫 렌더에 이미
+  // 전량이 들어 있어야 문서 높이가 유지되고, 그래야 브라우저의 스크롤 복원이
+  // 제자리를 찾는다 — 마운트 후에 채우면 이미 짧아진 높이로 잘린 뒤다.
+  const [restored] = useState(takeListCache)
+  const [filters, setFilters] = useState<DashboardFilters>(() => restored?.filters ?? {})
+  const [rows, setRows] = useState(() => restored?.rows ?? initialRows)
+  const [cursor, setCursor] = useState(() => restored?.cursor ?? initialCursor)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const sentinel = useRef<HTMLDivElement>(null)
@@ -47,6 +52,14 @@ export function JobList({ initialRows, initialCursor }: {
   // 첫 마운트는 서버 컴포넌트가 이미 기본 필터(빈 필터)로 첫 페이지를 받아왔으므로
   // 건너뛴다 — 안 그러면 페이지뷰마다 같은 조회가 중복으로 나간다.
   const isFirstRun = useRef(true)
+
+  // 언마운트 시점에 최신 값을 담아야 하는데, effect의 cleanup은 그 effect가
+  // 만들어질 때의 값을 붙든다. ref로 최신값을 따라가게 해 둔다.
+  const snapshot = useRef({ rows, cursor, filters })
+  snapshot.current = { rows, cursor, filters }
+
+  // 상세로 떠날 때만 실제로 담긴다(markDetailNavigation 참고).
+  useEffect(() => () => saveListCache(snapshot.current), [])
 
   // 필터가 바뀌면 서버에서 처음부터 다시 받는다 — 커서 페이징이라 클라이언트에서 좁힐 수 없다.
   useEffect(() => {
