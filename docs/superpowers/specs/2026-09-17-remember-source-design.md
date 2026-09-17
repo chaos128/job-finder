@@ -283,7 +283,7 @@ runCollect({ store, sources, findRating }, trigger)
 알 방법이 없다. Blind 커버리지를 표본 73%에서 실측 56%로 바로잡을 수 있었던 것은 확정하지 못한
 회사도 행으로 남겼기 때문이다.
 
-### 7.3 스키마 — migration 0010
+### 7.3 스키마 — migration 0011
 
 ```sql
 alter table jobs
@@ -399,8 +399,10 @@ Remember 122건이 들어오면 코퍼스가 대략 두 배가 된다. 현재 �
 
 수동 적용이다(러너 없음). Supabase 대시보드 SQL Editor에서 사람이 실행한다.
 
-- `0010_jobs_duplicate_of.sql` — `duplicate_of` 컬럼 + 인덱스, `jobs_needing_score` 뷰 재생성
-- `0011_searches_source.sql` — `searches.source text not null default 'wanted'`
+- `0010_searches_source.sql` — `searches.source text not null default 'wanted'`
+- `0011_jobs_duplicate_of.sql` — `duplicate_of` 컬럼 + 인덱스, `jobs_needing_score` 뷰 재생성
+
+번호가 구현 순서와 같다. `searches.source`가 먼저 있어야 소스 레지스트리 배선이 성립한다.
 
 기존 `searches` 행은 default로 `'wanted'`가 되므로 적용 전후 동작이 같다.
 `duplicate_of`는 적용 전에는 컬럼이 없어 코드가 죽는다 — **코드 배포 전에 적용해야 한다.**
