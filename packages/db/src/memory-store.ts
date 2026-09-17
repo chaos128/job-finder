@@ -1,4 +1,5 @@
 import { compareDashboardOrder } from './dashboard-order.js'
+import { matchesSearchTerm, normalizeSearchTerm } from './search-term.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
@@ -228,7 +229,9 @@ export class MemoryStore implements Store {
     const cursor = params.cursor
       && params.cursor.hidden === hidden && params.cursor.duplicates === duplicatesOnly
       ? params.cursor : undefined
-    const rows = [...this.scores.values()]
+    const search = normalizeSearchTerm(params.search)
+    // 커서·limit을 적용하기 전 단계. 여기서 센 것이 DashboardPage.total이 된다.
+    const matched = [...this.scores.values()]
       .map((score) => ({ score, job: this.jobs.get(score.jobId)! }))
       .filter(({ job, score }) =>
         job && score.status === 'ok'
@@ -236,7 +239,10 @@ export class MemoryStore implements Store {
         && (job.duplicateOf !== null) === duplicatesOnly
         && (params.minScore === undefined || score.total >= params.minScore)
         && (!params.bookmarkedOnly || job.bookmarked)
-        && (!params.unnotifiedOnly || score.notifiedAt === null))
+        && (!params.unnotifiedOnly || score.notifiedAt === null)
+        // SupabaseStore의 ilike 부분 일치와 같은 뜻이어야 한다 — 두 컬럼 중 하나라도.
+        && (!search || matchesSearchTerm(search, job.companyName, job.position)))
+    const rows = matched
       // SupabaseStore와 같은 순서여야 한다 — 동점은 jobId 내림차순으로 가른다.
       .sort((a, b) => compareDashboardOrder(
         { hidden: a.job.hidden, total: a.score.total, jobId: a.job.id },
@@ -257,6 +263,8 @@ export class MemoryStore implements Store {
     const last = rows[rows.length - 1]
     return {
       rows,
+      // SupabaseStore와 같은 규약: 커서를 준 요청에서는 세지 않는다.
+      total: params.cursor === undefined ? matched.length : null,
       nextCursor: rows.length === params.limit && last
         ? { hidden: last.hidden, duplicates: duplicatesOnly, total: last.total, jobId: last.jobId }
         : null,
@@ -288,7 +296,10 @@ export class MemoryStore implements Store {
 
   async listUnscoredJobs(limit: number): Promise<UnscoredJobs> {
     const matched = [...this.jobs.values()]
-      .filter((job) => !job.hidden && this.scores.get(job.id)?.status !== 'ok')
+      // duplicate_of를 함께 거르는 이유(jobs_unscored 뷰·0013과 같은 조건이어야 한다):
+      // 중복은 채점 큐에서 빠져 영원히 채점되지 않으므로 "점수가 없다"는 조건에
+      // 영원히 걸린다 — 안 거르면 미채점 목록에 영구 거주한다.
+      .filter((job) => !job.hidden && !job.duplicateOf && this.scores.get(job.id)?.status !== 'ok')
       // SupabaseStore와 같은 정렬 규칙 — 한 배치는 first_seen_at이 전부 같으므로
       // id를 2차 키로 써야 limit이 달라져도 같은 앞부분이 나온다.
       .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt) || a.id.localeCompare(b.id))

@@ -5,7 +5,7 @@ import type {
   Source, Store, SupabaseStore,
 } from '../src/index.js'
 
-const job = (externalId: string): NewJob => ({
+const job = (externalId: string, over: Partial<NewJob> = {}): NewJob => ({
   source: 'wanted',
   externalId,
   position: `Position ${externalId}`,
@@ -15,6 +15,7 @@ const job = (externalId: string): NewJob => ({
   addressFull: '서울 강남구',
   url: `https://www.wanted.co.kr/wd/${externalId}`,
   dueTime: null,
+  ...over,
 })
 
 /**
@@ -43,8 +44,14 @@ async function seedSearch(store: Store, source: Source): Promise<void> {
   await (store as SupabaseStore).__seedSearchForTests(source)
 }
 
-const seedScored = async (store: Store, specs: { ext: string; total: number }[]) => {
-  const created = await store.insertJobs(specs.map((s) => job(s.ext)))
+const seedScored = async (
+  store: Store,
+  specs: { ext: string; total: number; companyName?: string; position?: string }[],
+) => {
+  const created = await store.insertJobs(specs.map((s) => job(s.ext, {
+    ...(s.companyName === undefined ? {} : { companyName: s.companyName }),
+    ...(s.position === undefined ? {} : { position: s.position }),
+  })))
   for (const [i, spec] of specs.entries()) {
     await store.saveScore({
       jobId: created[i]!.id, total: spec.total,
@@ -391,6 +398,56 @@ export function describeStoreContract(
       expect(unnotified.rows.map((r) => r.total)).toEqual([50])
     })
 
+    test('search는 회사명과 포지션 어느 쪽에 걸려도 잡고, 대소문자를 무시한다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90, companyName: '카카오페이', position: 'Backend Engineer' },
+        { ext: '2', total: 80, companyName: 'ACME', position: 'Frontend Engineer' },
+        { ext: '3', total: 70, companyName: 'Toss', position: 'Designer' },
+      ])
+      const byCompany = await store.listDashboardJobs({ limit: 10, search: '카카오' })
+      expect(byCompany.rows.map((r) => r.companyName)).toEqual(['카카오페이'])
+
+      // 포지션에만 있는 말도 같은 검색어 하나로 걸려야 한다(두 컬럼 or).
+      const byPosition = await store.listDashboardJobs({ limit: 10, search: 'engineer' })
+      expect(byPosition.rows.map((r) => r.total)).toEqual([90, 80])
+
+      // 공백뿐인 검색어는 필터가 없는 것과 같다 — 빈 목록이 아니라 전건이다.
+      expect((await store.listDashboardJobs({ limit: 10, search: '   ' })).rows).toHaveLength(3)
+    })
+
+    // 회사명에 괄호가 흔하고("이베이재팬(eBay)") 쉼표도 쳐볼 수 있다. PostgREST 필터
+    // 문자열에서 이 둘은 각각 로직 트리 구분자라, 그대로 흘려보내면 괄호는 조용히
+    // 0건이 되고 쉼표는 400으로 페이지 전체를 죽인다(운영 DB 실측).
+    test('search에 괄호·쉼표가 들어가도 필터가 깨지지 않는다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90, companyName: '이베이재팬(eBay)' },
+        { ext: '2', total: 80, companyName: 'ACME' },
+      ])
+      const paren = await store.listDashboardJobs({ limit: 10, search: '이베이재팬(eBay)' })
+      expect(paren.rows.map((r) => r.companyName)).toEqual(['이베이재팬(eBay)'])
+
+      // 아무것도 안 걸리는 게 정답이다 — 던지지도, 전건을 주지도 않아야 한다.
+      const comma = await store.listDashboardJobs({ limit: 10, search: 'a,b' })
+      expect(comma.rows).toEqual([])
+    })
+
+    test('total은 limit에 잘리기 전 전체 건수이고, 이어보기 페이지에서는 null이다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 80 }, { ext: '3', total: 70 },
+      ])
+      // rows.length(2)를 총량으로 쓰면 화면이 거짓말을 한다 — 3이어야 한다.
+      const first = await store.listDashboardJobs({ limit: 2 })
+      expect(first.rows).toHaveLength(2)
+      expect(first.total).toBe(3)
+
+      // 총량은 필터에만 걸린다 — 커서를 태운 요청에서는 다시 세지 않는다.
+      const next = await store.listDashboardJobs({ limit: 2, cursor: first.nextCursor! })
+      expect(next.total).toBeNull()
+
+      // 필터가 좁히면 총량도 같이 좁아진다.
+      expect((await store.listDashboardJobs({ limit: 2, minScore: 80 })).total).toBe(2)
+    })
+
     test('getJobDetail은 공고 전문과 점수를 함께 준다', async () => {
       const [created] = await seedScored(store, [{ ext: '1', total: 88 }])
       const detail = await store.getJobDetail(created!.id)
@@ -524,6 +581,18 @@ export function describeStoreContract(
       await store.recordScoreFailure(created!.id, 'schema mismatch')
       const { rows } = await store.listUnscoredJobs(10)
       expect(rows.map((r) => r.jobId)).toEqual([created!.id])
+    })
+
+    // 중복은 채점 큐에서 빠져 영원히 채점되지 않는다. 그러니 "아직 점수가 없다"는
+    // 조건에는 영원히 걸리고, 거르지 않으면 미채점 목록에 영구 거주한다 — 운영에서
+    // 미채점 21건이 전부 중복 행이고 진짜 미채점은 0건인 상태가 실제로 나왔다.
+    // hidden으로는 안 걸러진다: 중복은 일부러 별도 컬럼으로 표시하기 때문이다.
+    test('중복으로 표시된 공고는 미채점 목록에 안 나온다', async () => {
+      const created = await store.insertJobs([job('1'), job('2')])
+      await store.markDuplicates([{ jobId: created[1]!.id, duplicateOf: created[0]!.id }])
+      const { rows, total } = await store.listUnscoredJobs(10)
+      expect(rows.map((r) => r.jobId)).toEqual([created[0]!.id])
+      expect(total).toBe(1)
     })
 
     // "오래된 것부터"가 실제로 뜻할 수 있는 것은 **배치 사이의 순서**뿐이다.
