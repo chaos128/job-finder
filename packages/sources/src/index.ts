@@ -11,6 +11,7 @@ export {
   buildRememberSearchBody, parseRememberSearchUrl,
 } from './remember/parse-url.js'
 export { RememberHttpError, getRememberJson, postJson } from './remember/client.js'
+export { normalizeRememberDetail, parseRememberListPage, parseRememberOpenState } from './remember/normalize.js'
 
 import type { SourceRegistry } from './types.js'
 import { createWantedSource } from './wanted/index.js'
