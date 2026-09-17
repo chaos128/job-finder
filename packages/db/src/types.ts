@@ -182,6 +182,9 @@ export interface DashboardRow {
   bookmarked: boolean
   /** 제외됨(exclude) 여부. true면 목록 맨 뒤로 정렬되고 카드가 비활성 처리된다. */
   hidden: boolean
+  source: Source
+  /** 중복이면 원본 job id. 카드에서 원본으로 가는 링크를 만든다. */
+  duplicateOf: string | null
   total: number
   breakdown: Record<string, number>
   notifiedAt: string | null

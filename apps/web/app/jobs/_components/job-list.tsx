@@ -201,6 +201,23 @@ export function JobList({ initialRows, initialCursor }: {
         >
           제외만
         </button>
+        {/* 출처가 둘이 되면서 같은 회사·비슷한 제목이 중복으로 잡힐 수 있다 — 판정이
+            휴리스틱이라 기본은 숨기되, 이 토글로 사람이 다시 꺼내 확인할 수 있어야 한다. */}
+        <button
+          type="button"
+          disabled={unscoredOnly}
+          aria-pressed={!!filters.duplicatesOnly}
+          onClick={() => setFilters((f) => ({ ...f, duplicatesOnly: !f.duplicatesOnly }))}
+          className={cn(
+            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'disabled:cursor-not-allowed disabled:opacity-40',
+            filters.duplicatesOnly
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+          )}
+        >
+          중복
+        </button>
         <button
           type="button"
           aria-pressed={unscoredOnly}

@@ -36,6 +36,15 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         <div className="flex items-center gap-2">
           <div className="text-lg font-semibold text-neutral-700">{job.companyName}</div>
           <BlindRating blind={blind} size="md" />
+          {/* 카드와 같은 배지 — 두 출처가 섞여 있어 상세에서도 어디서 온 공고인지 보여야 한다. */}
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+            {job.source === 'remember' ? '리멤버' : '원티드'}
+          </span>
+          {job.duplicateOf && (
+            <Link href={`/jobs/${job.duplicateOf}`} className="text-xs text-neutral-500 underline">
+              원본 보기
+            </Link>
+          )}
         </div>
         <h1 className="text-2xl font-bold">{job.position}</h1>
         <div className="flex items-center gap-4 pt-2">

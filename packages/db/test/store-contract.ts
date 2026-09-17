@@ -370,6 +370,9 @@ export function describeStoreContract(
       })
       // 스킵되지 않고 처음부터, 점수 내림차순으로 온다.
       expect(dupPage.rows.map((r) => r.jobId)).toEqual([created[1]!.id, created[2]!.id])
+      // 카드가 원본으로 가는 링크를 만들려면 행이 직접 duplicateOf를 들고 나와야 한다.
+      expect(dupPage.rows.map((r) => r.duplicateOf)).toEqual([created[0]!.id, created[0]!.id])
+      expect(dupPage.rows.every((r) => r.source === 'wanted')).toBe(true)
     })
 
     test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {

@@ -55,6 +55,21 @@ export function JobCard({
             {row.companyName}
           </Link>
           <BlindRating blind={row.blind} />
+          {/* 출처가 둘이 되면서 같은 회사·비슷한 제목이 나란히 보일 수 있다 —
+              어디서 온 공고인지가 카드에서 바로 보여야 한다. */}
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+            {row.source === 'remember' ? '리멤버' : '원티드'}
+          </span>
+          {/* 중복 판정은 휴리스틱이라 사람이 원본과 대조해 확인할 창이 필요하다. */}
+          {row.duplicateOf && (
+            <Link
+              href={`/jobs/${row.duplicateOf}`}
+              onClick={markDetailNavigation}
+              className="text-xs text-neutral-500 underline"
+            >
+              원본 보기
+            </Link>
+          )}
         </div>
         {/* truncate를 쓰지 않는다. 포지션 제목에 괄호로 도메인이 붙는 경우가 많은데
             (예: "Frontend Engineer (MLOps, Vision AI Platform)") 잘리면 그 부분이
