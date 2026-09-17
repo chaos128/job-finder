@@ -1,9 +1,10 @@
-import { MemoryStore } from '@job-finder/db'
+import { MemoryStore, type WantedSearchParams } from '@job-finder/db'
 import type { ExternalRef, JobSource } from '@job-finder/sources'
 import { expect, test, vi } from 'vitest'
 import { runCollect } from '../src/index.js'
 
 const params = {
+  source: 'wanted' as const,
   jobGroupId: '518', tagTypeIds: ['669'], locations: [],
   yearsFrom: 8, yearsTo: 10, country: 'kr', sort: 'job.latest_order',
 }
@@ -47,7 +48,8 @@ const noRating = async () => null
 async function storeWithSearch() {
   const store = new MemoryStore()
   store.searches.push({
-    id: 'search_1', url: 'https://www.wanted.co.kr/wdlist/518/669', params, enabled: true,
+    id: 'search_1', source: 'wanted',
+    url: 'https://www.wanted.co.kr/wdlist/518/669', params, enabled: true,
   })
   return store
 }
@@ -90,14 +92,14 @@ test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed
   const store = new MemoryStore()
   const badParams = { ...params, jobGroupId: '999' }
   store.searches.push(
-    { id: 'search_good', url: 'https://www.wanted.co.kr/wdlist/518/669', params, enabled: true },
-    { id: 'search_bad', url: 'https://www.wanted.co.kr/wdlist/999/669', params: badParams, enabled: true },
+    { id: 'search_good', source: 'wanted', url: 'https://www.wanted.co.kr/wdlist/518/669', params, enabled: true },
+    { id: 'search_bad', source: 'wanted', url: 'https://www.wanted.co.kr/wdlist/999/669', params: badParams, enabled: true },
   )
 
   const src: JobSource = {
     id: 'wanted',
     parseSearchUrl: () => params,
-    async *listRefs(searchParams) {
+    async *listRefs(searchParams: WantedSearchParams) {
       if (searchParams.jobGroupId === '999') throw new Error('search boom')
       yield ref('1')
       yield ref('2')

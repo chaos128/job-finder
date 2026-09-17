@@ -57,7 +57,7 @@ interface JobRow {
 }
 
 interface SearchRow {
-  id: string; url: string; params: SearchParams; enabled: boolean
+  id: string; source: Source; url: string; params: SearchParams; enabled: boolean
 }
 
 interface ProfileRow {
@@ -166,7 +166,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 
 export interface SupabaseStore extends Store {
   __truncateAllForTests(): Promise<void>
-  __seedSearchForTests(): Promise<string>
+  __seedSearchForTests(source?: Source): Promise<string>
 }
 
 export function createSupabaseStore(url: string, serviceKey: string): SupabaseStore {
@@ -211,7 +211,9 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       const rows = unwrap<SearchRow[]>(
         await db.from('searches').select('*').eq('enabled', true),
       )
-      return rows.map((r) => ({ id: r.id, url: r.url, params: r.params, enabled: r.enabled }))
+      return rows.map((r) => ({
+        id: r.id, source: r.source, url: r.url, params: r.params, enabled: r.enabled,
+      }))
     },
 
     async findJobIdsByExternalIds(source: Source, externalIds: string[]) {
@@ -685,14 +687,19 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       }
     },
 
-    async __seedSearchForTests() {
-      const params: SearchParams = {
-        jobGroupId: '0', tagTypeIds: [], locations: [],
-        yearsFrom: 0, yearsTo: 0, country: 'kr', sort: 'recommend',
-      }
+    async __seedSearchForTests(source: Source = 'wanted') {
+      const params: SearchParams = source === 'wanted'
+        ? {
+          source: 'wanted', jobGroupId: '0', tagTypeIds: [], locations: [],
+          yearsFrom: 0, yearsTo: 0, country: 'kr', sort: 'recommend',
+        }
+        : {
+          source: 'remember', jobCategoryNames: [], addresses: [],
+          organizationType: null, minExperience: null,
+        }
       const row = unwrap<{ id: string }>(
         await db.from('searches')
-          .insert({ url: 'https://www.wanted.co.kr/search?query=test', params })
+          .insert({ source, url: 'https://www.wanted.co.kr/search?query=test', params })
           .select('id').single(),
       )
       return row.id

@@ -1,11 +1,11 @@
-import type { SearchParams } from '@job-finder/db'
+import type { WantedSearchParams } from '@job-finder/db'
 
 /** Wanted API가 받아주는 연차 상한. UI는 20까지 만들지만 API는 422로 거부한다. */
 export const MAX_YEARS = 10
 
 const API_BASE = 'https://www.wanted.co.kr/api/v4/jobs'
 
-export function parseWantedSearchUrl(input: string): SearchParams {
+export function parseWantedSearchUrl(input: string): WantedSearchParams {
   const url = new URL(input)
   const segments = url.pathname.split('/').filter(Boolean)
   if (segments[0] !== 'wdlist' || !segments[1]) {
@@ -21,6 +21,7 @@ export function parseWantedSearchUrl(input: string): SearchParams {
   const yearsTo = clamped.length > 1 ? Math.max(...clamped) : MAX_YEARS
 
   return {
+    source: 'wanted',
     jobGroupId: segments[1],
     tagTypeIds: segments[2] ? [segments[2]] : [],
     locations: url.searchParams.getAll('locations'),
@@ -32,7 +33,7 @@ export function parseWantedSearchUrl(input: string): SearchParams {
 }
 
 export function buildWantedListUrl(
-  params: SearchParams,
+  params: WantedSearchParams,
   page: { limit: number; offset: number },
 ): string {
   const url = new URL(API_BASE)

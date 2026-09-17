@@ -1,4 +1,4 @@
-export type Source = 'wanted'
+export type Source = 'wanted' | 'remember'
 export type DetailStatus = 'pending' | 'ok' | 'failed'
 export type ScoreStatus = 'ok' | 'failed'
 export type Scorer = 'routine' | 'api'
@@ -15,7 +15,8 @@ export interface RunSummary {
   endedAt: string | null
 }
 
-export interface SearchParams {
+export interface WantedSearchParams {
+  source: 'wanted'
   jobGroupId: string
   tagTypeIds: string[]
   locations: string[]
@@ -25,8 +26,24 @@ export interface SearchParams {
   sort: string
 }
 
+/**
+ * Remember 검색 페이지 URL의 ?search= JSON과 같은 모양(camelCase)이다.
+ * API 본문은 snake_case를 받지만, 변환은 소스 구현이 명시적으로 한다 —
+ * 여기서 미리 snake_case로 저장하면 저장값과 URL을 눈으로 대조할 수 없다.
+ */
+export interface RememberSearchParams {
+  source: 'remember'
+  jobCategoryNames: Array<{ level1: string; level2: string }>
+  addresses: string[][]
+  organizationType: string | null
+  minExperience: number | null
+}
+
+export type SearchParams = WantedSearchParams | RememberSearchParams
+
 export interface Search {
   id: string
+  source: Source
   url: string
   params: SearchParams
   enabled: boolean

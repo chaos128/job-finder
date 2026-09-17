@@ -12,6 +12,12 @@ test('경로에서 직군/직무 id를 뽑는다', () => {
   expect(params.tagTypeIds).toEqual(['669'])
 })
 
+// searches.source 판별 유니온의 근거 — params 모양만으로 소스를 알 수 없어졌으므로
+// Wanted 파서가 자기 source를 직접 찍어야 한다.
+test('source를 wanted로 찍는다', () => {
+  expect(parseWantedSearchUrl(REAL_URL).source).toBe('wanted')
+})
+
 test('years 상한을 10으로 클램프한다', () => {
   const params = parseWantedSearchUrl(REAL_URL)
   expect(params.yearsFrom).toBe(8)

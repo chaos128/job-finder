@@ -1,4 +1,4 @@
-import type { SearchParams } from '@job-finder/db'
+import type { WantedSearchParams } from '@job-finder/db'
 import type { ExternalRef, JobSource, RawDetail } from '../types.js'
 import { absolute, getJson } from './client.js'
 import { normalizeWantedDetail, parseListPage } from './normalize.js'
@@ -13,7 +13,7 @@ export function createWantedSource(fetchImpl: typeof fetch = fetch): JobSource {
     id: 'wanted',
     parseSearchUrl: parseWantedSearchUrl,
 
-    async *listRefs(params: SearchParams): AsyncIterable<ExternalRef> {
+    async *listRefs(params: WantedSearchParams): AsyncIterable<ExternalRef> {
       let url = buildWantedListUrl(params, { limit: PAGE_SIZE, offset: 0 })
       for (let page = 0; page < MAX_PAGES; page++) {
         const payload = await getJson(url, fetchImpl)

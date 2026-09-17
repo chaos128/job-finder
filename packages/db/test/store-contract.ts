@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from 'vitest'
+import { MemoryStore } from '../src/index.js'
 import type {
-  DashboardCursor, DashboardPage, NewJob, RunPipeline, RunTrigger, Store,
+  DashboardCursor, DashboardPage, NewJob, RunPipeline, RunTrigger, Search, SearchParams,
+  Source, Store, SupabaseStore,
 } from '../src/index.js'
 
 const job = (externalId: string): NewJob => ({
@@ -14,6 +16,32 @@ const job = (externalId: string): NewJob => ({
   url: `https://www.wanted.co.kr/wd/${externalId}`,
   dueTime: null,
 })
+
+/**
+ * Remember가 붙으면 params 모양만으로는 어느 소스인지 알 수 없다 — 행이 직접
+ * source를 들고 나와야 한다. Store 인터페이스에는 검색을 만드는 메서드가
+ * 없다(검색은 사람이 손으로 등록하는 전제)라, 구현마다 직접 심는다:
+ * MemoryStore는 배열에 push하고 SupabaseStore는 테스트 전용 헬퍼로 insert한다.
+ */
+async function seedSearch(store: Store, source: Source): Promise<void> {
+  if (store instanceof MemoryStore) {
+    const params: SearchParams = source === 'wanted'
+      ? {
+        source: 'wanted', jobGroupId: '0', tagTypeIds: [], locations: [],
+        yearsFrom: 0, yearsTo: 0, country: 'kr', sort: 'recommend',
+      }
+      : {
+        source: 'remember', jobCategoryNames: [], addresses: [],
+        organizationType: null, minExperience: null,
+      }
+    const search: Search = {
+      id: `search_${source}`, source, url: 'https://example.com/search', params, enabled: true,
+    }
+    store.searches.push(search)
+    return
+  }
+  await (store as SupabaseStore).__seedSearchForTests(source)
+}
 
 const seedScored = async (store: Store, specs: { ext: string; total: number }[]) => {
   const created = await store.insertJobs(specs.map((s) => job(s.ext)))
@@ -226,6 +254,12 @@ export function describeStoreContract(
       const searchId = seedSearchId ? await seedSearchId(store) : 'search-1'
       await store.linkSearchHits(searchId, [inserted!.id])
       await expect(store.linkSearchHits(searchId, [inserted!.id])).resolves.toBeUndefined()
+    })
+
+    test('검색은 자기 source를 들고 나온다', async () => {
+      await seedSearch(store, 'remember')
+      const [search] = await store.listEnabledSearches()
+      expect(search!.source).toBe('remember')
     })
 
     test('listDashboardJobs는 점수 내림차순으로 자르고 커서를 준다', async () => {

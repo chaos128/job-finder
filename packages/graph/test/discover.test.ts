@@ -5,8 +5,10 @@ import { createDiscoverNode, runNode } from '../src/index.js'
 
 const search: Search = {
   id: 'search_1',
+  source: 'wanted',
   url: 'https://www.wanted.co.kr/wdlist/518/669',
   params: {
+    source: 'wanted',
     jobGroupId: '518', tagTypeIds: ['669'], locations: [],
     yearsFrom: 8, yearsTo: 10, country: 'kr', sort: 'job.latest_order',
   },
