@@ -8,7 +8,7 @@ import { BlindRating } from "./blind-rating";
 import { formatExperience } from "./experience";
 import { markDetailNavigation } from "./list-cache";
 import { AXIS_BAR_COLOR, scoreBandClass } from "./score-visuals";
-import { sourceLabel } from "./source-label";
+import { sourceBadgeClass, sourceLabel } from "./source-label";
 
 const AXES = ["stack", "role", "domain", "growth", "conditions"] as const;
 
@@ -26,6 +26,13 @@ export function JobCard({
     <div
       className={cn(
         "flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm",
+        // 북마크한 카드는 배경만 살짝 물들인다. amber-50은 흰 카드와 명도가 거의
+        // 같아서(페이지 배경 #fafafa와도) 목록을 훑을 때 덩어리로만 보이고 글자
+        // 대비는 그대로다 — "은은하게"가 요구사항이라 -100 이상은 쓰지 않는다.
+        // 별점(Star)이 이미 amber라 같은 계열로 묶어 "내가 표시해 둔 것"으로 읽힌다.
+        // hidden보다 먼저 써서, 둘 다 해당하면 아래 회색이 이긴다 — 제외된 카드가
+        // 노랗게 남아 있으면 비활성으로 안 읽힌다.
+        row.bookmarked && "border-amber-200 bg-amber-50",
         // 제외된 카드는 비활성처럼 보이게: 회색 배경 + 텍스트 흐림 + 클릭 대상이
         // 아님을 알리는 opacity. 실제로 pointer-events를 막지는 않는다 — 되돌리기
         // 버튼(과 상세 링크)은 계속 눌러야 하기 때문이다. neutral-200인 이유:
@@ -58,7 +65,12 @@ export function JobCard({
           <BlindRating blind={row.blind} />
           {/* 출처가 둘이 되면서 같은 회사·비슷한 제목이 나란히 보일 수 있다 —
               어디서 온 공고인지가 카드에서 바로 보여야 한다. */}
-          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-xs font-medium",
+              sourceBadgeClass(row.source),
+            )}
+          >
             {sourceLabel(row.source)}
           </span>
           {/* 중복 판정은 휴리스틱이라 사람이 원본과 대조해 확인할 창이 필요하다. */}

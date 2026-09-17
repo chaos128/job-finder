@@ -276,7 +276,7 @@ export function describeStoreContract(
       const page = await store.listDashboardJobs({ limit: 2 })
       expect(page.rows.map((r) => r.total)).toEqual([90, 80])
       expect(page.nextCursor).toEqual(
-        { hidden: false, duplicates: false, total: 80, jobId: page.rows[1]!.jobId },
+        { hidden: false, total: 80, jobId: page.rows[1]!.jobId },
       )
     })
 
@@ -347,39 +347,24 @@ export function describeStoreContract(
       ])
       await store.setJobHidden(created[0]!.id, true)
 
-      const stale: DashboardCursor = { hidden: false, duplicates: false, total: 80, jobId: created[1]!.id }
+      const stale: DashboardCursor = { hidden: false, total: 80, jobId: created[1]!.id }
       const page = await store.listDashboardJobs({ limit: 10, hiddenOnly: true, cursor: stale })
       expect(page.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
     })
 
-    // duplicatesOnly는 hiddenOnly와 같은 배타 버킷이라 같은 문제가 생긴다 — 여기서는
-    // 손으로 만든 낡은 커서 대신, 비중복 버킷에서 실제로 받은 nextCursor를 그대로
-    // 중복 버킷 질의에 재사용한다. 비중복 버킷의 유일한 행(total 50)보다 두 중복 행
-    // (90, 70)이 더 높은 점수라, duplicates 축 비교가 빠지면 total 커서 필터가 두
-    // 행을 전부 "커서보다 앞선 행"으로 오인해 걸러낸다 — 중복 목록에서 가장 점수
-    // 높은 행이 조용히 사라지는, finding이 지적한 바로 그 증상이다.
-    test('중복 목록은 비중복 목록의 커서를 무시하고 처음부터 준다', async () => {
+    // 이 자리에는 duplicatesOnly 버킷의 커서 축을 검증하는 테스트가 있었다. 그
+    // 버킷 자체가 성립하지 않아 걷어냈다 — 이 목록은 scores에서 출발하는데 중복은
+    // 채점 큐에서 빠져 점수 행이 영영 안 생긴다. 옛 테스트는 seedScored로 점수를
+    // 먼저 만든 뒤 markDuplicates를 불러, 실제 파이프라인에서 생길 수 없는 상태를
+    // 픽스처로 썼다. 그래서 운영에서 토글이 빈 화면을 내는데도 초록이었다.
+    // 중복은 이제 listDuplicateJobs가 낸다(아래 별도 테스트).
+    test('중복으로 표시된 공고는 점수 목록에 나오지 않는다', async () => {
       const created = await seedScored(store, [
-        { ext: '1', total: 50 }, { ext: '2', total: 90 }, { ext: '3', total: 70 },
+        { ext: '1', total: 90 }, { ext: '2', total: 50 },
       ])
-      await store.markDuplicates([
-        { jobId: created[1]!.id, duplicateOf: created[0]!.id },
-        { jobId: created[2]!.id, duplicateOf: created[0]!.id },
-      ])
-
-      // 비중복 버킷의 유일한 행이 꽉 찬 페이지(limit 1)라 nextCursor가 나온다.
-      const firstPage = await store.listDashboardJobs({ limit: 1 })
-      expect(firstPage.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
-      const staleCursor = firstPage.nextCursor!
-
-      const dupPage = await store.listDashboardJobs({
-        limit: 10, duplicatesOnly: true, cursor: staleCursor,
-      })
-      // 스킵되지 않고 처음부터, 점수 내림차순으로 온다.
-      expect(dupPage.rows.map((r) => r.jobId)).toEqual([created[1]!.id, created[2]!.id])
-      // 카드가 원본으로 가는 링크를 만들려면 행이 직접 duplicateOf를 들고 나와야 한다.
-      expect(dupPage.rows.map((r) => r.duplicateOf)).toEqual([created[0]!.id, created[0]!.id])
-      expect(dupPage.rows.every((r) => r.source === 'wanted')).toBe(true)
+      await store.markDuplicates([{ jobId: created[0]!.id, duplicateOf: created[1]!.id }])
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows.map((r) => r.jobId)).toEqual([created[1]!.id])
     })
 
     test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {
@@ -581,6 +566,29 @@ export function describeStoreContract(
       await store.recordScoreFailure(created!.id, 'schema mismatch')
       const { rows } = await store.listUnscoredJobs(10)
       expect(rows.map((r) => r.jobId)).toEqual([created!.id])
+    })
+
+    // 중복 목록이 별도 조회인 이유: 점수 목록(listDashboardJobs)은 scores에서
+    // 출발하는데 중복은 채점 큐에서 빠져 점수 행이 영영 안 생긴다 — 그 질의의
+    // 필터로는 언제나 0건이었다. 실제로 운영에서 중복 토글이 빈 화면을 냈다.
+    test('중복 목록은 중복으로 표시된 공고만 준다', async () => {
+      const created = await store.insertJobs([job('1'), job('2'), job('3')])
+      await store.markDuplicates([{ jobId: created[1]!.id, duplicateOf: created[0]!.id }])
+      const { rows, total } = await store.listDuplicateJobs(10)
+      expect(rows.map((r) => r.jobId)).toEqual([created[1]!.id])
+      expect(rows[0]!.duplicateOf).toBe(created[0]!.id)
+      expect(total).toBe(1)
+    })
+
+    // 채점 여부와 무관해야 한다 — 중복은 점수가 없는 것이 정상이고, 그럼에도
+    // 목록에 나와야 사람이 오탐을 알아볼 수 있다(되돌리는 경로가 SQL뿐이다).
+    test('중복 목록은 점수가 없어도 나온다', async () => {
+      const created = await store.insertJobs([job('1'), job('2')])
+      await store.markDuplicates([{ jobId: created[1]!.id, duplicateOf: created[0]!.id }])
+      const { rows } = await store.listDuplicateJobs(10)
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.companyName).toBe(created[1]!.companyName)
+      expect(rows[0]!.source).toBe(created[1]!.source)
     })
 
     // 중복은 채점 큐에서 빠져 영원히 채점되지 않는다. 그러니 "아직 점수가 없다"는

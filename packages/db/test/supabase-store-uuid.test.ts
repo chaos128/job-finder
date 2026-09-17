@@ -59,7 +59,7 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
   test('커서의 jobId가 uuid가 아니면 동점 비교 항을 빼고 질의한다', async () => {
     const urls = captureRequestUrls()
     await store.listDashboardJobs({
-      limit: 10, cursor: { hidden: false, duplicates: false, total: 70, jobId: '없는-id' },
+      limit: 10, cursor: { hidden: false, total: 70, jobId: '없는-id' },
     })
     expect(urls).toHaveLength(1)
     expect(urls[0]).toContain('total.lt.70')
@@ -70,7 +70,7 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
     const urls = captureRequestUrls()
     const jobId = '11111111-2222-3333-4444-555555555555'
     await store.listDashboardJobs({
-      limit: 10, cursor: { hidden: false, duplicates: false, total: 70, jobId },
+      limit: 10, cursor: { hidden: false, total: 70, jobId },
     })
     expect(decodeURIComponent(urls[0]!)).toContain(`and(total.eq.70,job_id.lt.${jobId})`)
   })
@@ -106,7 +106,7 @@ describe('SupabaseStore.listDashboardJobs의 hidden 필터', () => {
     await store.listDashboardJobs({
       limit: 10, hiddenOnly: true,
       cursor: {
-        hidden: false, duplicates: false, total: 70, jobId: '11111111-2222-3333-4444-555555555555',
+        hidden: false, total: 70, jobId: '11111111-2222-3333-4444-555555555555',
       },
     })
     expect(decodeURIComponent(urls[0]!)).not.toContain('total.lt.70')
@@ -115,17 +115,26 @@ describe('SupabaseStore.listDashboardJobs의 hidden 필터', () => {
 
 // 다른 배타 버킷(hidden)과 같은 이유로 실제 쿼리 문자열을 고정해 둔다 — 계약
 // 테스트는 MemoryStore만 돌아 PostgREST 술어 자체(is.null vs not.is.null)는 못 잡는다.
-describe('SupabaseStore.listDashboardJobs의 duplicate_of 배타 버킷', () => {
+describe('SupabaseStore.listDashboardJobs의 duplicate_of 제외', () => {
   test('기본은 jobs.duplicate_of=is.null로 묻는다', async () => {
     const urls = captureRequestUrls()
     await store.listDashboardJobs({ limit: 10 })
     expect(decodeURIComponent(urls[0]!)).toContain('jobs.duplicate_of=is.null')
   })
 
-  test('duplicatesOnly면 jobs.duplicate_of=not.is.null로 묻는다', async () => {
+})
+
+describe('SupabaseStore.listDuplicateJobs', () => {
+  // 중복 목록은 scores가 아니라 jobs에서 출발해야 한다 — 중복은 채점 큐에서 빠져
+  // 점수 행이 영영 안 생기므로, scores 기반 질의로는 언제나 0건이다(운영에서
+  // 중복 토글이 빈 화면을 냈다).
+  test('jobs에서 duplicate_of=not.is.null을 first_seen_at,id 오름차순으로 묻는다', async () => {
     const urls = captureRequestUrls()
-    await store.listDashboardJobs({ limit: 10, duplicatesOnly: true })
-    expect(decodeURIComponent(urls[0]!)).toContain('jobs.duplicate_of=not.is.null')
+    await store.listDuplicateJobs(10)
+    const url = decodeURIComponent(urls[0]!)
+    expect(url).toContain('/jobs?')
+    expect(url).toContain('duplicate_of=not.is.null')
+    expect(url).toContain('order=first_seen_at.asc,id.asc')
   })
 })
 

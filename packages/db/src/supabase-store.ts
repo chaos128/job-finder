@@ -1,11 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { normalizeSearchTerm, toIlikePattern } from './search-term.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   DedupCandidate, Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   CompanyRating, CompanyRatingResult, JobDetail, JobRecheck,
   NotifyPendingRow, NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
-  SearchParams, Source, UnscoredJobs,
+  SearchParams, Source, UnscoredJobs, DuplicateJobs,
 } from './types.js'
 
 const MAX_ATTEMPTS = 3
@@ -93,6 +94,8 @@ type UnscoredJobRow = {
   id: string; company_name: string; position: string; url: string
   due_time: string | null; first_seen_at: string
 }
+
+type DuplicateJobRow = UnscoredJobRow & { source: Source; duplicate_of: string }
 
 // scores.job_id is both primary key and FK -> jobs, so this is a 1:1
 // relationship. PostgREST embeds 1:1 relations as a single nullable
@@ -428,27 +431,46 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       //  `jobs.hidden`을 커서에 섞을 수 없었기 때문인데, 이제 필요가 없어졌다.)
       const hidden = params.hiddenOnly === true
       // 중복 여부도 같은 방식의 배타 버킷이다 — 기본은 중복 아닌 것만, true면 중복만.
-      const duplicatesOnly = params.duplicatesOnly === true
 
       // `!inner` + 명시적 컬럼 목록이라 select 문자열에 `*`가 없다 — postgrest-js는
       // Database 제네릭 없이는 1:1 embed의 카디널리티를 알 수 없어 jobs를 배열로
       // 추론한다(런타임 값은 실제로는 객체). 결과 타입을 직접 지정해 우회한다.
-      let q = db.from('scores').select<typeof DASHBOARD_SELECT, DashboardJoinRow>(DASHBOARD_SELECT)
+      const search = normalizeSearchTerm(params.search)
+      // 총량은 필터가 바뀔 때만 달라진다 — 커서가 있는 이어보기 요청에서는 세지
+      // 않는다. count는 필터에만 걸리고 limit·range와 무관하므로(실측: Range 0-4에
+      // 105 반환), 첫 페이지에서 한 번 세면 그 필터 조합의 전체 건수가 된다.
+      const counting = params.cursor === undefined
+      let q = db.from('scores')
+        .select<typeof DASHBOARD_SELECT, DashboardJoinRow>(
+          DASHBOARD_SELECT, counting ? { count: 'exact' } : {},
+        )
         .eq('status', 'ok').eq('jobs.hidden', hidden)
         .order('total', { ascending: false })
         .order('job_id', { ascending: false })
         .limit(params.limit)
-      q = duplicatesOnly ? q.not('jobs.duplicate_of', 'is', null) : q.is('jobs.duplicate_of', null)
+      // 중복은 이 목록에 아예 오지 않는다. 별도 조회(listDuplicateJobs)가 낸다 —
+      // 이 질의는 scores에서 출발해서 점수 없는 행을 표현할 수 없다.
+      q = q.is('jobs.duplicate_of', null)
       if (params.minScore !== undefined) q = q.gte('total', params.minScore)
       if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
       if (params.unnotifiedOnly) q = q.is('notified_at', null)
+      // 임베드 컬럼 둘을 or로 묶는다. CLAUDE.md가 경고하는 함정(로직 트리가 임베드
+      // 컬럼 참조를 못 받는다)은 **최상위** or에 `jobs.x`를 섞을 때의 이야기다 —
+      // referencedTable로 트리 자체를 jobs에 붙이면(`jobs.or=(...)`) 통과하고,
+      // `!inner`라 부모 행까지 제대로 걸러진다(실측 확인).
+      if (search) {
+        const pattern = toIlikePattern(search)
+        q = q.or(`company_name.ilike.${pattern},position.ilike.${pattern}`, {
+          referencedTable: 'jobs',
+        })
+      }
       // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다. 그 커서로 새 목록을
       // 태우면 두 질의의 결과가 한 목록에 이어붙는다 — 소속이 다르면 버린다.
       // duplicates 축도 hidden과 같은 이유로 같이 비교한다: 이 축만 바뀐 낡은
       // 커서를 통과시키면 새 버킷의 첫 페이지가 이전 버킷 커서 이후부터 시작해
       // 상위 점수 행이 조용히 건너뛰어진다.
       const cursor = params.cursor
-        && params.cursor.hidden === hidden && params.cursor.duplicates === duplicatesOnly
+        && params.cursor.hidden === hidden
         ? params.cursor : undefined
       if (cursor) {
         // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
@@ -459,7 +481,10 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
           ? `total.lt.${cursor.total},and(total.eq.${cursor.total},job_id.lt.${cursor.jobId})`
           : `total.lt.${cursor.total}`)
       }
-      const rows = unwrap<DashboardJoinRow[]>(await q).map((r) => ({
+      // count를 함께 받아야 해서 unwrap을 쓰지 않는다 — 응답 객체 자체가 필요하다.
+      const res = await q
+      if (res.error) throw new Error(res.error.message)
+      const rows = (res.data ?? []).map((r) => ({
         jobId: r.jobs.id, companyName: r.jobs.company_name, position: r.jobs.position,
         url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked, hidden,
         source: r.jobs.source, duplicateOf: r.jobs.duplicate_of,
@@ -476,8 +501,10 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       return {
         rows: withBlind,
         nextCursor: withBlind.length === params.limit && last
-          ? { hidden: last.hidden, duplicates: duplicatesOnly, total: last.total, jobId: last.jobId }
+          ? { hidden: last.hidden, total: last.total, jobId: last.jobId }
           : null,
+        // count를 요청하지 않은 이어보기 응답에서는 null이다(PostgREST도 null을 준다).
+        total: counting ? res.count ?? null : null,
       }
     },
 
@@ -546,9 +573,37 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       }
     },
 
+    async listDuplicateJobs(limit: number): Promise<DuplicateJobs> {
+      // jobs에서 바로 고른다 — listDashboardJobs처럼 scores에서 출발하면 언제나
+      // 0건이다(중복은 채점 큐에서 빠져 점수 행이 안 생긴다). 뷰가 필요하지 않은
+      // 것은 조건이 컬럼 하나이기 때문이다.
+      //
+      // 정렬·count 규약은 listUnscoredJobs와 같다: first_seen_at은 배치 전체가
+      // 같은 값이라 id를 2차 키로 써야 상한이 달라져도 같은 앞부분이 나오고,
+      // count는 같은 요청에 붙여 두 값이 다른 시점을 보지 않게 한다.
+      const res = await db.from('jobs')
+        .select('id, source, company_name, position, url, due_time, first_seen_at, duplicate_of',
+          { count: 'exact' })
+        .not('duplicate_of', 'is', null)
+        .order('first_seen_at', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(limit)
+      const rows = unwrap<DuplicateJobRow[]>(res)
+      return {
+        rows: rows.map((r) => ({
+          jobId: r.id, companyName: r.company_name, position: r.position,
+          url: r.url, dueTime: r.due_time, firstSeenAt: r.first_seen_at,
+          source: r.source, duplicateOf: r.duplicate_of,
+        })),
+        total: res.count ?? rows.length,
+      }
+    },
+
     async getDashboardStats(): Promise<DashboardStats> {
       const [jobCount, scoreRows, runRows] = await Promise.all([
-        db.from('jobs').select('*', { count: 'exact', head: true }),
+        // 중복은 채점 큐에서 빠져 영원히 채점되지 않는다 — 분모에 넣으면
+        // "채점 진행"이 100%에 영원히 못 닿는다(실측 348/369에서 멈췄다).
+        db.from('jobs').select('*', { count: 'exact', head: true }).is('duplicate_of', null),
         db.from('scores').select('rubric_version, scored_at').eq('status', 'ok'),
         db.from('runs').select('id, pipeline, trigger, started_at, ended_at')
           .order('started_at', { ascending: false }).limit(5),

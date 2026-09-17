@@ -1,9 +1,11 @@
 'use server'
 
-import type { DashboardCursor, DashboardFilters, DashboardPage, UnscoredJobs } from '@job-finder/db'
+import type {
+  DashboardCursor, DashboardFilters, DashboardPage, DuplicateJobs, UnscoredJobs,
+} from '@job-finder/db'
 import { revalidatePath } from 'next/cache'
 import { getStore } from '@/lib/store'
-import { PAGE_SIZE, UNSCORED_LIMIT } from './constants'
+import { DUPLICATE_LIMIT, PAGE_SIZE, UNSCORED_LIMIT } from './constants'
 
 /**
  * 새 JSON API 라우트를 만들지 않고 Server Action을 쓴다 — 페이지가 공개라
@@ -31,4 +33,9 @@ export async function toggleHidden(jobId: string, next: boolean): Promise<void> 
 /** 토글이 켜질 때만 호출된다 — 채점된 목록의 질의와는 무관한 별도 구간이다. */
 export async function loadUnscoredJobs(): Promise<UnscoredJobs> {
   return getStore().listUnscoredJobs(UNSCORED_LIMIT)
+}
+
+/** 토글이 켜질 때만 호출된다 — 채점된 목록의 질의와는 무관한 별도 구간이다. */
+export async function loadDuplicateJobs(): Promise<DuplicateJobs> {
+  return getStore().listDuplicateJobs(DUPLICATE_LIMIT)
 }

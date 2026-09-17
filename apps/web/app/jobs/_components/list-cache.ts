@@ -16,6 +16,10 @@ interface ListCache {
   rows: DashboardRow[]
   cursor: DashboardCursor | null
   filters: DashboardFilters
+  /** 필터에 걸린 전체 건수. 커서 페이지 응답은 세지 않으므로 목록과 함께 들고 있어야 한다. */
+  total: number | null
+  /** 입력 중인 검색어. filters.search는 디바운스된 값이라 되살릴 때 입력칸이 비어 보인다. */
+  searchInput: string
 }
 
 let cache: ListCache | null = null

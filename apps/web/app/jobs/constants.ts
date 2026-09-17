@@ -10,3 +10,6 @@ export const PAGE_SIZE = 20
 // 미채점 목록은 페이징이 없다 — 상한만 걸고, 이 값에서 잘렸다는 사실은 헤더가
 // 총량과 함께 밝힌다(listUnscoredJobs가 total을 따로 준다).
 export const UNSCORED_LIMIT = 100
+// 중복 목록도 페이징이 없다 — 상한만 걸고, 잘렸다는 사실은 헤더가 총량과 함께 밝힌다.
+// 중복은 수집분의 일부(실측 Remember 122건 중 21건)라 미채점보다 작게 잡아도 된다.
+export const DUPLICATE_LIMIT = 100

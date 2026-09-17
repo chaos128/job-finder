@@ -1,6 +1,7 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  CompanyRatingResult, DedupCandidate, Job, JobDetail, JobDetailFields, JobRecheck, NewJob,
+  CompanyRatingResult, DedupCandidate, DuplicateJobs, Job, JobDetail, JobDetailFields,
+  JobRecheck, NewJob,
   NodeRunEntry,
   Notification,
   NotifyPendingRow,
@@ -52,6 +53,12 @@ export interface Store {
    * 오래된 수집분부터 limit건까지 주고, 잘리기 전 총량을 함께 준다.
    */
   listUnscoredJobs(limit: number): Promise<UnscoredJobs>
+  /**
+   * 중복으로 표시된 공고. 점수 목록(listDashboardJobs)으로는 낼 수 없어 별도 조회다 —
+   * 그 질의는 scores에서 출발하는데 중복은 채점 큐에서 빠져 점수 행이 영영 안 생긴다.
+   * 미채점 목록과 같은 모양·같은 상한 방식이고, 오래된 수집분부터 준다.
+   */
+  listDuplicateJobs(limit: number): Promise<DuplicateJobs>
 
   // ── 회사 별점 (Blind)
   /**

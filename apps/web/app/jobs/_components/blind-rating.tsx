@@ -1,5 +1,6 @@
 import type { CompanyRating } from '@job-finder/db'
 import { Star } from 'lucide-react'
+import { blindReviewsUrl } from './blind-url'
 
 /**
  * Blind 회사 별점. 미등록 회사는 아무것도 그리지 않는다 — 실측 커버리지가 56%라
@@ -15,7 +16,7 @@ export function BlindRating({ blind, size = 'sm' }: {
   if (!blind) return null
   return (
     <a
-      href={blind.blindUrl}
+      href={blindReviewsUrl(blind.blindUrl)}
       target="_blank"
       rel="noreferrer"
       // 매칭된 Blind 회사명을 title로 남긴다. 원문과 다를 수 있어서

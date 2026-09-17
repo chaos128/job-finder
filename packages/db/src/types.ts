@@ -205,14 +205,15 @@ export interface DashboardRow {
  *
  * hidden을 함께 들고 다니는 이유: 목록이 제외 여부로 갈려 있어(hiddenOnly) 커서가
  * 어느 쪽 목록의 것인지 남겨둬야, 필터를 바꾼 뒤 낡은 커서가 섞여 들어오는 것을
- * 스토어가 알아볼 수 있다. duplicates도 같은 이유로 들고 다닌다 — duplicatesOnly로
- * 갈리는 두 번째 배타 버킷이라, 이 축만 바뀐 낡은 커서도 똑같이 걸러내야 한다.
- * 그러지 않으면 새 버킷의 첫 페이지가 이전 버킷 커서의 (total, jobId) 다음부터
- * 시작해, 정렬 1순위인 상위 점수 행이 조용히 건너뛰어진다.
+ * 스토어가 알아볼 수 있다. 그러지 않으면 새 버킷의 첫 페이지가 이전 버킷 커서의
+ * (total, jobId) 다음부터 시작해, 정렬 1순위인 상위 점수 행이 조용히 건너뛰어진다.
+ *
+ * 한때 duplicates 축도 여기 있었다. 중복을 점수 목록 안의 배타 버킷으로 만들려던
+ * 설계였는데, 이 목록은 scores에서 출발하고 중복은 채점되지 않아 그 버킷이 언제나
+ * 비어 있었다. 중복은 별도 조회(listDuplicateJobs)로 옮겼으므로 축도 걷어냈다.
  */
 export interface DashboardCursor {
   hidden: boolean
-  duplicates: boolean
   total: number
   jobId: string
 }
@@ -227,15 +228,28 @@ export interface DashboardFilters {
    */
   hiddenOnly?: boolean
   /**
-   * true면 중복으로 표시된 공고만, 아니면 중복이 아닌 것만 준다.
-   * hiddenOnly와 같은 배타 버킷이라 한 페이지에 두 값이 섞이지 않는다.
+   * 회사명 또는 포지션에 대한 대소문자 무시 부분 일치. 빈 문자열·공백뿐이면
+   * 필터가 없는 것으로 다룬다(normalizeSearchTerm 참고).
+   *
+   * 클라이언트에서 거를 수 없다 — 커서 페이징이라 화면에 올라온 행은 전체의
+   * 일부일 뿐이고, 좁히면 남은 페이지를 어디서 이어야 할지 알 수 없다.
    */
-  duplicatesOnly?: boolean
+  search?: string
 }
 
 export interface DashboardPage {
   rows: DashboardRow[]
   nextCursor: DashboardCursor | null
+  /**
+   * 커서·limit과 무관한, 필터에 걸리는 전체 건수. **커서를 준 요청에서는 null이다** —
+   * 총량은 필터가 바뀔 때만 달라지므로 이어보기 페이지마다 다시 셀 이유가 없고,
+   * 세면 무한 스크롤 한 번에 왕복이 하나씩 더 붙는다. 호출자는 null을 "이번 응답은
+   * 세지 않았다"로 읽고 직전 값을 유지한다.
+   *
+   * rows.length를 총량처럼 보여주면 화면이 거짓말을 한다 — 무한 스크롤이라 그 값은
+   * "지금까지 불러온 만큼"일 뿐이다(UnscoredJobs.total과 같은 이유).
+   */
+  total: number | null
 }
 
 /**
@@ -274,6 +288,26 @@ export interface UnscoredJob {
  * 미채점 목록은 상한에서 잘린다. 잘린 건수를 백로그 총량인 것처럼 보여주면
  * 정확히 상한값(100건)에서 화면이 거짓말을 하므로, 상한과 무관한 총량을 함께 준다.
  */
+/**
+ * 중복으로 표시된 공고. 미채점 목록과 같은 모양인 이유가 있다 — 중복은 채점 큐에서
+ * 빠지므로 **점수 행이 영원히 생기지 않는다**. 그래서 DashboardRow(점수에서 출발하는
+ * 질의의 결과)로는 표현할 수 없고, 점수 목록 안의 필터로도 만들 수 없다.
+ *
+ * 그럼에도 화면에 내보이는 이유: 중복 판정은 휴리스틱이고 되돌리는 경로가 SQL뿐이라,
+ * 사람이 오탐을 알아볼 창이 없으면 행을 지우지 않고 남긴 의미가 사라진다.
+ */
+export interface DuplicateJob extends UnscoredJob {
+  source: Source
+  /** 이 공고가 중복으로 지목한 원본 job id. 화면은 여기로 링크를 건다. */
+  duplicateOf: string
+}
+
+export interface DuplicateJobs {
+  rows: DuplicateJob[]
+  /** limit 적용 전 전체 중복 건수. rows.length보다 클 수 있다. */
+  total: number
+}
+
 export interface UnscoredJobs {
   rows: UnscoredJob[]
   /** limit 적용 전 전체 미채점 건수. rows.length보다 클 수 있다. */

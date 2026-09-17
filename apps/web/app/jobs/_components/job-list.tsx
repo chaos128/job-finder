@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { loadMoreJobs, toggleBookmark, toggleHidden } from '../actions'
 import { JobCard } from './job-card'
 import { saveListCache, takeListCache } from './list-cache'
+import { DuplicateList } from './duplicate-list'
 import { UnscoredList } from './unscored-list'
 
 /**
@@ -56,6 +57,8 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
   // 대신 미채점 구간만 보여준다. 점수 목록의 상태는 그대로 남아 있어서 끄면 재조회 없이
   // 돌아온다.
   const [unscoredOnly, setUnscoredOnly] = useState(false)
+  // 중복도 같은 성질의 별도 구간이다(점수가 없어 점수 목록으로는 낼 수 없다).
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false)
 
   // 필터가 바뀔 때마다 늘어나는 세대 번호. cancelled 플래그 하나로는 필터→필터
   // 경쟁만 막힌다 — 스크롤 응답이 필터 교체 "이후"에 도착하는 역방향 경쟁은 못
@@ -250,17 +253,18 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
         >
           제외만
         </button>
-        {/* 출처가 둘이 되면서 같은 회사·비슷한 제목이 중복으로 잡힐 수 있다 — 판정이
-            휴리스틱이라 기본은 숨기되, 이 토글로 사람이 다시 꺼내 확인할 수 있어야 한다. */}
+        {/* 중복은 점수 목록의 필터가 아니라 별도 뷰다 — 그 목록은 scores에서
+            출발하는데 중복은 채점 큐에서 빠져 점수 행이 영영 안 생긴다. 필터로
+            두었더니 언제나 빈 화면이었다. 미채점 토글과 같은 방식으로 가른다. */}
         <button
           type="button"
           disabled={unscoredOnly}
-          aria-pressed={!!filters.duplicatesOnly}
-          onClick={() => setFilters((f) => ({ ...f, duplicatesOnly: !f.duplicatesOnly }))}
+          aria-pressed={duplicatesOnly}
+          onClick={() => setDuplicatesOnly((v) => !v)}
           className={cn(
             'h-9 rounded-full border px-4 font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
-            filters.duplicatesOnly
+            duplicatesOnly
               ? 'border-neutral-900 bg-neutral-900 text-white'
               : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
           )}
@@ -269,10 +273,12 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
         </button>
         <button
           type="button"
+          disabled={duplicatesOnly}
           aria-pressed={unscoredOnly}
           onClick={() => setUnscoredOnly((v) => !v)}
           className={cn(
             'h-9 rounded-full border px-4 font-medium transition-colors',
+            'disabled:cursor-not-allowed disabled:opacity-40',
             unscoredOnly
               ? 'border-neutral-900 bg-neutral-900 text-white'
               : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
@@ -284,7 +290,7 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
             뿐이라, 그 값을 "건수"로 보여주면 스크롤할 때마다 총량이 늘어나는 것처럼
             보인다. 아직 못 받았으면(첫 조회 중) 숫자 자리를 비워 둔다 — 0건으로
             채우면 "결과 없음"으로 잘못 읽힌다. */}
-        {!unscoredOnly && (
+        {!unscoredOnly && !duplicatesOnly && (
           <Badge className="ml-auto">{total === null ? '…' : `${total}건`}</Badge>
         )}
       </div>
@@ -293,6 +299,8 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           어느 목록의 상태인지 알 수 없다 — UnscoredList가 자기 에러를 따로 보여준다. */}
       {unscoredOnly ? (
         <UnscoredList />
+      ) : duplicatesOnly ? (
+        <DuplicateList />
       ) : (
         <>
           {error && (

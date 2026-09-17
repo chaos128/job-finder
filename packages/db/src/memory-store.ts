@@ -6,6 +6,7 @@ import type {
   CompanyRating, CompanyRatingResult, DashboardRow, DedupCandidate,
   Job, JobDetail, JobDetailFields, JobRecheck, NewJob, NodeRunEntry, Notification,
   NotifyPendingRow,
+  DuplicateJobs,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
   UnscoredJobs,
 } from './types.js'
@@ -221,13 +222,12 @@ export class MemoryStore implements Store {
     // 섞이지 않는다.
     const hidden = params.hiddenOnly === true
     // 중복 여부도 같은 방식의 배타 버킷이다 — 기본은 중복 아닌 것만, true면 중복만.
-    const duplicatesOnly = params.duplicatesOnly === true
     // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다 — 소속이 다르면 버린다.
     // duplicates 축도 hidden과 같은 이유로 같이 비교한다: 이 축만 바뀐 낡은
     // 커서를 통과시키면 새 버킷의 첫 페이지가 이전 버킷 커서 이후부터 시작해
     // 상위 점수 행이 조용히 건너뛰어진다.
     const cursor = params.cursor
-      && params.cursor.hidden === hidden && params.cursor.duplicates === duplicatesOnly
+      && params.cursor.hidden === hidden
       ? params.cursor : undefined
     const search = normalizeSearchTerm(params.search)
     // 커서·limit을 적용하기 전 단계. 여기서 센 것이 DashboardPage.total이 된다.
@@ -236,7 +236,7 @@ export class MemoryStore implements Store {
       .filter(({ job, score }) =>
         job && score.status === 'ok'
         && job.hidden === hidden
-        && (job.duplicateOf !== null) === duplicatesOnly
+        && job.duplicateOf === null
         && (params.minScore === undefined || score.total >= params.minScore)
         && (!params.bookmarkedOnly || job.bookmarked)
         && (!params.unnotifiedOnly || score.notifiedAt === null)
@@ -266,7 +266,7 @@ export class MemoryStore implements Store {
       // SupabaseStore와 같은 규약: 커서를 준 요청에서는 세지 않는다.
       total: params.cursor === undefined ? matched.length : null,
       nextCursor: rows.length === params.limit && last
-        ? { hidden: last.hidden, duplicates: duplicatesOnly, total: last.total, jobId: last.jobId }
+        ? { hidden: last.hidden, total: last.total, jobId: last.jobId }
         : null,
     }
   }
@@ -312,6 +312,22 @@ export class MemoryStore implements Store {
     }
   }
 
+  async listDuplicateJobs(limit: number): Promise<DuplicateJobs> {
+    const matched = [...this.jobs.values()]
+      .filter((job) => job.duplicateOf !== null)
+      // listUnscoredJobs와 같은 정렬 규칙 — 한 배치는 firstSeenAt이 전부 같으므로
+      // id를 2차 키로 써야 limit이 달라져도 같은 앞부분이 나온다.
+      .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt) || a.id.localeCompare(b.id))
+    return {
+      rows: matched.slice(0, limit).map((job) => ({
+        jobId: job.id, companyName: job.companyName, position: job.position,
+        url: job.url, dueTime: job.dueTime, firstSeenAt: job.firstSeenAt,
+        source: job.source, duplicateOf: job.duplicateOf!,
+      })),
+      total: matched.length,
+    }
+  }
+
   async getDashboardStats(): Promise<DashboardStats> {
     // SupabaseStore와 같은 필터 — 실패한 채점(status: 'failed')이 남긴 자리표시자
     // 값(rubricVersion 'v1', scoredAt 0)이 분포와 최종 채점 시각을 오염시키면 안 된다.
@@ -320,7 +336,9 @@ export class MemoryStore implements Store {
     for (const s of scores) rubricVersions[s.rubricVersion] = (rubricVersions[s.rubricVersion] ?? 0) + 1
     const scoredAt = scores.map((s) => s.scoredAt).sort()
     return {
-      totalJobs: this.jobs.size,
+      // SupabaseStore와 같은 조건 — 중복은 채점 큐에서 빠져 영원히 채점되지 않으므로
+      // 분모에 넣으면 "채점 진행"이 100%에 영원히 못 닿는다(실측 348/369에서 멈췄다).
+      totalJobs: [...this.jobs.values()].filter((j) => j.duplicateOf === null).length,
       scoredJobs: scores.length,
       lastScoredAt: scoredAt[scoredAt.length - 1] ?? null,
       rubricVersions,

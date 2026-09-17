@@ -37,7 +37,7 @@ export default async function Page() {
         pendingNotify={{ count: pendingCount, topN: profile.notifyRule.topN }}
         now={now}
       />
-      <JobList initialRows={first.rows} initialCursor={first.nextCursor} />
+      <JobList initialRows={first.rows} initialCursor={first.nextCursor} initialTotal={first.total} />
     </main>
   )
 }
