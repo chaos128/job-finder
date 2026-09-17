@@ -202,10 +202,14 @@ export interface DashboardRow {
  *
  * hidden을 함께 들고 다니는 이유: 목록이 제외 여부로 갈려 있어(hiddenOnly) 커서가
  * 어느 쪽 목록의 것인지 남겨둬야, 필터를 바꾼 뒤 낡은 커서가 섞여 들어오는 것을
- * 스토어가 알아볼 수 있다.
+ * 스토어가 알아볼 수 있다. duplicates도 같은 이유로 들고 다닌다 — duplicatesOnly로
+ * 갈리는 두 번째 배타 버킷이라, 이 축만 바뀐 낡은 커서도 똑같이 걸러내야 한다.
+ * 그러지 않으면 새 버킷의 첫 페이지가 이전 버킷 커서의 (total, jobId) 다음부터
+ * 시작해, 정렬 1순위인 상위 점수 행이 조용히 건너뛰어진다.
  */
 export interface DashboardCursor {
   hidden: boolean
+  duplicates: boolean
   total: number
   jobId: string
 }

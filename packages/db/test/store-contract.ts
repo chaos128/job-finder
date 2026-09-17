@@ -268,7 +268,9 @@ export function describeStoreContract(
       ])
       const page = await store.listDashboardJobs({ limit: 2 })
       expect(page.rows.map((r) => r.total)).toEqual([90, 80])
-      expect(page.nextCursor).toEqual({ hidden: false, total: 80, jobId: page.rows[1]!.jobId })
+      expect(page.nextCursor).toEqual(
+        { hidden: false, duplicates: false, total: 80, jobId: page.rows[1]!.jobId },
+      )
     })
 
     // 동점이 페이지 경계에 걸리면 total 단독 커서는 행을 건너뛰거나 중복시킨다.
@@ -338,7 +340,7 @@ export function describeStoreContract(
       ])
       await store.setJobHidden(created[0]!.id, true)
 
-      const stale: DashboardCursor = { hidden: false, total: 80, jobId: created[1]!.id }
+      const stale: DashboardCursor = { hidden: false, duplicates: false, total: 80, jobId: created[1]!.id }
       const page = await store.listDashboardJobs({ limit: 10, hiddenOnly: true, cursor: stale })
       expect(page.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
     })
@@ -702,17 +704,25 @@ export function describeStoreContract(
     })
 
     describe('교차 중복', () => {
+      // 정렬을 두 축 모두 검증한다: 별도 insertJobs 호출(a)이 뒤 배치(c/d/e)보다
+      // firstSeenAt이 앞서야 하고, 같은 배치 안(d, e)에서는 firstSeenAt이 동률이라
+      // id 오름차순이 유일한 승자를 정한다 — Task 8이 이 순서의 첫 행을 원본으로
+      // 취급하므로, 남는 행이 하나뿐인 테스트로는 정렬 자체를 증명하지 못한다.
       test('중복 인덱스는 중복 아니고 제외 안 된 행만, 오래된 순으로 준다', async () => {
-        const [a, b, c] = await store.insertJobs([
+        const [a, b] = await store.insertJobs([
           { ...job('a'), companyName: '루닛', position: 'FE' },
           { ...job('b'), source: 'remember', companyName: '루닛', position: 'FE' },
+        ])
+        const [c, d, e] = await store.insertJobs([
           { ...job('c'), companyName: '토스', position: 'BE' },
+          { ...job('d'), companyName: '카카오', position: 'BE' },
+          { ...job('e'), companyName: '네이버', position: 'BE' },
         ])
         await store.setJobHidden(c!.id, true)
         await store.markDuplicates([{ jobId: b!.id, duplicateOf: a!.id }])
 
         const index = await store.listDedupIndex()
-        expect(index.map((r) => r.id)).toEqual([a!.id])
+        expect(index.map((r) => r.id)).toEqual([a!.id, d!.id, e!.id])
       })
 
       // 마감돼 숨겨진 옛 행이 후보로 남으면, 새 external_id로 다시 올라온 공고가

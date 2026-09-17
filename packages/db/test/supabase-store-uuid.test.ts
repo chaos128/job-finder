@@ -58,7 +58,9 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
   // 끼어들어 동점 비교 항 자체를 확인하려는 이 테스트의 URL 개수가 흔들린다.
   test('커서의 jobId가 uuid가 아니면 동점 비교 항을 빼고 질의한다', async () => {
     const urls = captureRequestUrls()
-    await store.listDashboardJobs({ limit: 10, cursor: { hidden: false, total: 70, jobId: '없는-id' } })
+    await store.listDashboardJobs({
+      limit: 10, cursor: { hidden: false, duplicates: false, total: 70, jobId: '없는-id' },
+    })
     expect(urls).toHaveLength(1)
     expect(urls[0]).toContain('total.lt.70')
     expect(urls[0]).not.toContain('job_id.lt')
@@ -67,7 +69,9 @@ describe('SupabaseStore는 uuid가 아닌 id에 MemoryStore와 같은 답을 준
   test('uuid 커서는 동점 비교 항을 그대로 싣는다', async () => {
     const urls = captureRequestUrls()
     const jobId = '11111111-2222-3333-4444-555555555555'
-    await store.listDashboardJobs({ limit: 10, cursor: { hidden: false, total: 70, jobId } })
+    await store.listDashboardJobs({
+      limit: 10, cursor: { hidden: false, duplicates: false, total: 70, jobId },
+    })
     expect(decodeURIComponent(urls[0]!)).toContain(`and(total.eq.70,job_id.lt.${jobId})`)
   })
 })
@@ -101,7 +105,9 @@ describe('SupabaseStore.listDashboardJobs의 hidden 필터', () => {
     const urls = captureRequestUrls()
     await store.listDashboardJobs({
       limit: 10, hiddenOnly: true,
-      cursor: { hidden: false, total: 70, jobId: '11111111-2222-3333-4444-555555555555' },
+      cursor: {
+        hidden: false, duplicates: false, total: 70, jobId: '11111111-2222-3333-4444-555555555555',
+      },
     })
     expect(decodeURIComponent(urls[0]!)).not.toContain('total.lt.70')
   })

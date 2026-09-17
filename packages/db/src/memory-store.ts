@@ -222,7 +222,12 @@ export class MemoryStore implements Store {
     // 중복 여부도 같은 방식의 배타 버킷이다 — 기본은 중복 아닌 것만, true면 중복만.
     const duplicatesOnly = params.duplicatesOnly === true
     // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다 — 소속이 다르면 버린다.
-    const cursor = params.cursor && params.cursor.hidden === hidden ? params.cursor : undefined
+    // duplicates 축도 hidden과 같은 이유로 같이 비교한다: 이 축만 바뀐 낡은
+    // 커서를 통과시키면 새 버킷의 첫 페이지가 이전 버킷 커서 이후부터 시작해
+    // 상위 점수 행이 조용히 건너뛰어진다.
+    const cursor = params.cursor
+      && params.cursor.hidden === hidden && params.cursor.duplicates === duplicatesOnly
+      ? params.cursor : undefined
     const rows = [...this.scores.values()]
       .map((score) => ({ score, job: this.jobs.get(score.jobId)! }))
       .filter(({ job, score }) =>
@@ -252,7 +257,8 @@ export class MemoryStore implements Store {
     return {
       rows,
       nextCursor: rows.length === params.limit && last
-        ? { hidden: last.hidden, total: last.total, jobId: last.jobId } : null,
+        ? { hidden: last.hidden, duplicates: duplicatesOnly, total: last.total, jobId: last.jobId }
+        : null,
     }
   }
 

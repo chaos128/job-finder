@@ -344,11 +344,13 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
           .order('total', { ascending: false }).limit(NOTIFY_CANDIDATE_LIMIT),
       )
 
-      // jobs는 !inner가 아닌 평범한 embed라, 필터에 안 맞는 행은 null이 되어
-      // 돌아올 뿐 부모(score) 행 자체가 빠지지는 않는다 — r.jobs 존재 확인이
-      // 이미 hidden과 duplicate_of 불일치를 함께 걸러낸다. duplicate_of를
-      // 명시로 한 번 더 확인하는 것은 이 스토어가 실 Supabase로 테스트되지
-      // 않는 환경이라 붙인 방어선이다(중복이 새어 나가면 다이제스트 슬롯을 뺏는다).
+      // jobs는 !inner가 아닌 평범한 embed라, duplicate_of 필터에 안 맞는 행은
+      // embed가 null로 돌아올 뿐 부모(score) 행 자체가 빠지지는 않는다 —
+      // r.jobs 존재 확인이 그 불일치를 걸러낸다. hidden은 이 쿼리에 필터를
+      // 걸지 않았으므로 아래 !r.jobs.hidden이 제외의 유일한 수단이다 — 지우면
+      // 제외된 공고가 다이제스트로 샌다. duplicate_of를 JS에서 한 번 더
+      // 확인하는 것은 이 스토어가 실 Supabase로 테스트되지 않는 환경이라
+      // 붙인 방어선이다(중복이 새어 나가면 다이제스트 슬롯을 뺏는다).
       return rows
         .filter((r) => r.jobs && !r.jobs.hidden && r.jobs.duplicate_of === null)
         .map((r) => ({ job: toJob(r.jobs), score: toScore(r) }))
@@ -441,7 +443,12 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       if (params.unnotifiedOnly) q = q.is('notified_at', null)
       // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다. 그 커서로 새 목록을
       // 태우면 두 질의의 결과가 한 목록에 이어붙는다 — 소속이 다르면 버린다.
-      const cursor = params.cursor && params.cursor.hidden === hidden ? params.cursor : undefined
+      // duplicates 축도 hidden과 같은 이유로 같이 비교한다: 이 축만 바뀐 낡은
+      // 커서를 통과시키면 새 버킷의 첫 페이지가 이전 버킷 커서 이후부터 시작해
+      // 상위 점수 행이 조용히 건너뛰어진다.
+      const cursor = params.cursor
+        && params.cursor.hidden === hidden && params.cursor.duplicates === duplicatesOnly
+        ? params.cursor : undefined
       if (cursor) {
         // 커서 이전 행만: total이 더 작거나, total이 같으면 job_id가 더 작은 행.
         // uuid가 아닌 jobId는 어떤 행과도 동점 비교가 성립하지 않는다 — 캐스팅
@@ -467,7 +474,8 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       return {
         rows: withBlind,
         nextCursor: withBlind.length === params.limit && last
-          ? { hidden: last.hidden, total: last.total, jobId: last.jobId } : null,
+          ? { hidden: last.hidden, duplicates: duplicatesOnly, total: last.total, jobId: last.jobId }
+          : null,
       }
     },
 
