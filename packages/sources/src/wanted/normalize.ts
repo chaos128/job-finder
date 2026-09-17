@@ -1,7 +1,7 @@
 import type { JobDetailFields } from '@job-finder/db'
 import { z } from 'zod'
 import { normalizeDueTime } from '../date.js'
-import type { ExternalRef, RawDetail } from '../types.js'
+import type { ExternalRef, JobOpenState, RawDetail } from '../types.js'
 
 const listItemSchema = z.object({
   id: z.number(),
@@ -76,12 +76,6 @@ export function normalizeWantedDetail(raw: RawDetail): JobDetailFields {
     skillTags: (parsed.job.skill_tags ?? []).map((t) => t.title),
     raw: raw.payload,
   }
-}
-
-/** 재확인 결과. closed면 목록에서 제외하고, dueTime은 화면 표시를 최신으로 맞춘다. */
-export interface JobOpenState {
-  closed: boolean
-  dueTime: string | null
 }
 
 /**

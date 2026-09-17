@@ -1,5 +1,5 @@
 import { runCollect } from '@job-finder/graph'
-import { createWantedSource } from '@job-finder/sources'
+import { createSourceRegistry } from '@job-finder/sources'
 import { getStore } from '@/lib/store'
 import { requireBearer } from '@/lib/guard'
 
@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (denied) return denied
 
   const report = await runCollect(
-    { store: getStore(), source: createWantedSource() },
+    { store: getStore(), sources: createSourceRegistry() },
     'cron',
   )
   // 건별 실패가 있으면 5xx. 대시보드도 알림도 없어서 Vercel cron 로그의 상태

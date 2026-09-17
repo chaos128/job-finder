@@ -1,5 +1,5 @@
 import { runCollect, runNotify } from '@job-finder/graph'
-import { createWantedSource } from '@job-finder/sources'
+import { createSourceRegistry } from '@job-finder/sources'
 import { getMailer } from '@/lib/mailer'
 import { getStore } from '@/lib/store'
 import { requireBearer } from '@/lib/guard'
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   const outcomes: boolean[] = []
 
   if (stage === 'collect' || stage === 'all') {
-    const { ok, value } = await runPhase(() => runCollect({ store, source: createWantedSource() }, 'manual'))
+    const { ok, value } = await runPhase(() => runCollect({ store, sources: createSourceRegistry() }, 'manual'))
     result.collect = value
     outcomes.push(ok)
   }

@@ -1,6 +1,6 @@
 import { createSupabaseStore } from '@job-finder/db'
 import { RATING_STALE_DAYS, runCollect } from '@job-finder/graph'
-import { createWantedSource, parseWantedSearchUrl } from '@job-finder/sources'
+import { createSourceRegistry, parseWantedSearchUrl } from '@job-finder/sources'
 
 const DETAIL_BATCH = 25
 
@@ -11,7 +11,7 @@ function requireEnv(name: string): string {
 }
 
 async function main() {
-  const source = createWantedSource()
+  const sources = createSourceRegistry()
 
   // --url 이 주어지면 검색을 먼저 등록한다 (최초 1회용). 이 경로는 SQL만 출력하고
   // DB에 접속하지 않으므로, Supabase store는 아래에서 이 분기를 지난 뒤에 만든다 —
@@ -47,7 +47,7 @@ async function main() {
   let totalRated = 0
   while (true) {
     round++
-    const report = await runCollect({ store, source }, 'cli', { detailLimit: DETAIL_BATCH })
+    const report = await runCollect({ store, sources }, 'cli', { detailLimit: DETAIL_BATCH })
     totalDetailed += report.detailed
     totalRated += report.rated
     console.log(

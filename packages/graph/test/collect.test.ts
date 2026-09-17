@@ -36,6 +36,7 @@ function source(refs: ExternalRef[]): JobSource {
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       }
     },
+    parseOpenState: () => ({ closed: false, dueTime: null }),
   }
 }
 
@@ -56,7 +57,7 @@ async function storeWithSearch() {
 
 test('검색부터 상세까지 한 번에 처리한다', async () => {
   const store = await storeWithSearch()
-  const report = await runCollect({ store, source: source([ref('1'), ref('2')]), findRating: noRating }, 'cron')
+  const report = await runCollect({ store, sources: { wanted: source([ref('1'), ref('2')]) }, findRating: noRating }, 'cron')
 
   expect(report).toMatchObject({ searches: 1, found: 2, created: 2, detailed: 2 })
   expect(report.failed).toHaveLength(0)
@@ -66,8 +67,8 @@ test('검색부터 상세까지 한 번에 처리한다', async () => {
 test('두 번 돌려도 새로 생기는 것이 없다 (멱등)', async () => {
   const store = await storeWithSearch()
   const src = source([ref('1'), ref('2')])
-  await runCollect({ store, source: src, findRating: noRating }, 'cron')
-  const second = await runCollect({ store, source: src, findRating: noRating }, 'cron')
+  await runCollect({ store, sources: { wanted: src }, findRating: noRating }, 'cron')
+  const second = await runCollect({ store, sources: { wanted: src }, findRating: noRating }, 'cron')
 
   expect(second).toMatchObject({ created: 0, detailed: 0 })
   expect(store.jobs.size).toBe(2)
@@ -76,13 +77,13 @@ test('두 번 돌려도 새로 생기는 것이 없다 (멱등)', async () => {
 test('비활성 검색은 건너뛴다', async () => {
   const store = await storeWithSearch()
   store.searches[0]!.enabled = false
-  const report = await runCollect({ store, source: source([ref('1')]), findRating: noRating }, 'cron')
+  const report = await runCollect({ store, sources: { wanted: source([ref('1')]) }, findRating: noRating }, 'cron')
   expect(report).toMatchObject({ searches: 0, found: 0, created: 0 })
 })
 
 test('run을 열고 닫으며 node_runs를 남긴다', async () => {
   const store = await storeWithSearch()
-  const report = await runCollect({ store, source: source([ref('1')]), findRating: noRating }, 'manual')
+  const report = await runCollect({ store, sources: { wanted: source([ref('1')]) }, findRating: noRating }, 'manual')
   expect(report.runId).toMatch(/^run_/)
   expect(store.nodeRuns.map((n) => n.node)).toEqual(['discover', 'fetchDetail', 'companyRating'])
   // 방금 상세를 받은 공고는 재확인 대상이 아니라 recheck는 돌지 않는다.
@@ -115,9 +116,10 @@ test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       }
     },
+    parseOpenState: () => ({ closed: false, dueTime: null }),
   }
 
-  const report = await runCollect({ store, source: src, findRating: noRating }, 'cron')
+  const report = await runCollect({ store, sources: { wanted: src }, findRating: noRating }, 'cron')
 
   // 실패한 검색 옆의 정상 검색은 그대로 상세 단계까지 도달한다 (job '2'는 성공)
   expect(report.detailed).toBe(1)
@@ -137,7 +139,7 @@ test('본문에서 에러가 나도 endRun은 호출된다', async () => {
   const endRunSpy = vi.spyOn(store, 'endRun')
   vi.spyOn(store, 'listEnabledSearches').mockRejectedValue(new Error('boom'))
 
-  await expect(runCollect({ store, source: source([]), findRating: noRating }, 'cron')).rejects.toThrow('boom')
+  await expect(runCollect({ store, sources: { wanted: source([]) }, findRating: noRating }, 'cron')).rejects.toThrow('boom')
   expect(endRunSpy).toHaveBeenCalledTimes(1)
 })
 
@@ -145,10 +147,10 @@ test('detailLimit을 넘는 건은 다음 실행에서 처리되고, hitDetailLi
   const store = await storeWithSearch()
   const src = source([ref('1'), ref('2'), ref('3')])
 
-  const first = await runCollect({ store, source: src, findRating: noRating }, 'cron', { detailLimit: 1 })
+  const first = await runCollect({ store, sources: { wanted: src }, findRating: noRating }, 'cron', { detailLimit: 1 })
   expect(first).toMatchObject({ created: 3, detailed: 1, hitDetailLimit: true })
 
-  const second = await runCollect({ store, source: src, findRating: noRating }, 'cron', { detailLimit: 1 })
+  const second = await runCollect({ store, sources: { wanted: src }, findRating: noRating }, 'cron', { detailLimit: 1 })
   expect(second).toMatchObject({ created: 0, detailed: 1, hitDetailLimit: true })
 
   const okCount = [...store.jobs.values()].filter((j) => j.detailStatus === 'ok').length

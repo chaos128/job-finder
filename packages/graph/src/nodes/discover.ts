@@ -1,5 +1,5 @@
 import type { NewJob, Search, Store } from '@job-finder/db'
-import { SourceHttpError, type ExternalRef, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, type ExternalRef, type SourceRegistry } from '@job-finder/sources'
 import { fail, ok, type Node } from '../core/node.js'
 
 export interface DiscoverResult {
@@ -11,15 +11,28 @@ export interface DiscoverResult {
 }
 
 export function createDiscoverNode(
-  deps: { store: Store; source: JobSource },
+  deps: { store: Store; sources: SourceRegistry },
 ): Node<Search, DiscoverResult> {
   return {
     name: 'discover',
 
     async run(search) {
+      const source = deps.sources[search.source]
+      if (!source) return fail('UNKNOWN_SOURCE', `등록되지 않은 소스: ${search.source}`, false)
+      // search.source(라우팅 컬럼)와 search.params.source(유니온 판별자)는 각자 따로
+      // 값을 바꿀 수 있는 별개 필드다. 어긋나면 엉뚱한 구현이 잘못된 모양의 params를
+      // 받아 조용히 쓰레기 URL을 만들 수 있으므로, 조용히 틀리는 대신 여기서 실패한다.
+      if (search.params.source !== search.source) {
+        return fail(
+          'SOURCE_MISMATCH',
+          `search.source(${search.source})와 search.params.source(${search.params.source})가 다르다`,
+          false,
+        )
+      }
+
       const refs: ExternalRef[] = []
       try {
-        for await (const ref of deps.source.listRefs(search.params)) refs.push(ref)
+        for await (const ref of source.listRefs(search.params)) refs.push(ref)
       } catch (cause) {
         if (cause instanceof SourceHttpError) {
           return fail('SOURCE_HTTP', cause.message, cause.retryable)
@@ -29,11 +42,11 @@ export function createDiscoverNode(
 
       try {
         const externalIds = refs.map((r) => r.externalId)
-        const known = await deps.store.findJobIdsByExternalIds(deps.source.id, externalIds)
+        const known = await deps.store.findJobIdsByExternalIds(source.id, externalIds)
 
         const rows: NewJob[] = refs
           .filter((r) => !known.has(r.externalId))
-          .map((r) => ({ source: deps.source.id, ...r.job }))
+          .map((r) => ({ source: source.id, ...r.job }))
 
         const created = await deps.store.insertJobs(rows)
 

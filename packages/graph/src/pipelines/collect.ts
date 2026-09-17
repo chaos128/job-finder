@@ -1,5 +1,5 @@
 import type { RunTrigger, Store } from '@job-finder/db'
-import { findCompanyRating, type JobSource } from '@job-finder/sources'
+import { findCompanyRating, type SourceRegistry } from '@job-finder/sources'
 import { createCompanyRatingNode, type FindRating } from '../nodes/company-rating.js'
 import { createDiscoverNode } from '../nodes/discover.js'
 import { createRecheckNode } from '../nodes/recheck.js'
@@ -56,17 +56,17 @@ const RATING_CONCURRENCY = 2
 export const RATING_STALE_DAYS = 30
 
 export async function runCollect(
-  deps: { store: Store; source: JobSource; findRating?: FindRating },
+  deps: { store: Store; sources: SourceRegistry; findRating?: FindRating },
   trigger: RunTrigger,
   opts: { detailLimit?: number; ratingLimit?: number; recheckLimit?: number } = {},
 ): Promise<CollectReport> {
-  const { store, source } = deps
+  const { store, sources } = deps
   const runId = await store.startRun('collect', trigger)
 
   try {
     const searches = await store.listEnabledSearches()
     const discovered = await runNode(
-      createDiscoverNode({ store, source }),
+      createDiscoverNode({ store, sources }),
       searches,
       (s) => s.id,
       { runId, store },
@@ -75,7 +75,7 @@ export async function runCollect(
     const detailLimit = opts.detailLimit ?? DEFAULT_DETAIL_LIMIT
     const pending = await store.listJobsNeedingDetail(detailLimit)
     const detailed = await runNode(
-      createFetchDetailNode({ store, source }),
+      createFetchDetailNode({ store, sources }),
       pending,
       (job) => job.id,
       { runId, store },
@@ -87,7 +87,7 @@ export async function runCollect(
       opts.recheckLimit ?? DEFAULT_RECHECK_LIMIT, RECHECK_STALE_DAYS,
     )
     const rechecked = await runNode(
-      createRecheckNode({ store, source }),
+      createRecheckNode({ store, sources }),
       stale,
       (j) => j.id,
       { runId, store },

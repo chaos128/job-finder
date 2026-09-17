@@ -1,7 +1,7 @@
 import type { WantedSearchParams } from '@job-finder/db'
 import type { ExternalRef, JobSource, RawDetail } from '../types.js'
 import { absolute, getJson } from './client.js'
-import { normalizeWantedDetail, parseListPage } from './normalize.js'
+import { normalizeWantedDetail, parseJobOpenState, parseListPage } from './normalize.js'
 import { buildWantedListUrl, parseWantedSearchUrl } from './parse-url.js'
 
 const PAGE_SIZE = 100
@@ -33,5 +33,6 @@ export function createWantedSource(fetchImpl: typeof fetch = fetch): JobSource {
     },
 
     normalize: normalizeWantedDetail,
+    parseOpenState: parseJobOpenState,
   }
 }

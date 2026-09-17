@@ -1,5 +1,5 @@
 import type { Job, Store } from '@job-finder/db'
-import { SourceHttpError, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, type JobSource, type SourceRegistry } from '@job-finder/sources'
 import { fail, ok, type Node, type NodeResult } from '../core/node.js'
 
 function messageOf(cause: unknown): string {
@@ -28,15 +28,22 @@ async function reportFailure(
 }
 
 export function createFetchDetailNode(
-  deps: { store: Store; source: JobSource },
+  deps: { store: Store; sources: SourceRegistry },
 ): Node<Job, string> {
   return {
     name: 'fetchDetail',
 
     async run(job) {
+      const source = deps.sources[job.source]
+      if (!source) {
+        return reportFailure(
+          deps.store, job.id, 'UNKNOWN_SOURCE', `등록되지 않은 소스: ${job.source}`, false,
+        )
+      }
+
       let raw: Awaited<ReturnType<JobSource['fetchDetail']>>
       try {
-        raw = await deps.source.fetchDetail(job.externalId)
+        raw = await source.fetchDetail(job.externalId)
       } catch (cause) {
         const retryable = cause instanceof SourceHttpError ? cause.retryable : false
         return reportFailure(deps.store, job.id, 'SOURCE_HTTP', messageOf(cause), retryable)
@@ -44,7 +51,7 @@ export function createFetchDetailNode(
 
       let fields: ReturnType<JobSource['normalize']>
       try {
-        fields = deps.source.normalize(raw)
+        fields = source.normalize(raw)
       } catch (cause) {
         return reportFailure(deps.store, job.id, 'NORMALIZE_FAILED', messageOf(cause), false)
       }

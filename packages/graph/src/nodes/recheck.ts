@@ -1,5 +1,5 @@
 import type { Job, Store } from '@job-finder/db'
-import { SourceHttpError, parseJobOpenState, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, type JobSource, type SourceRegistry } from '@job-finder/sources'
 import { fail, ok, type Node, type NodeResult } from '../core/node.js'
 
 function messageOf(cause: unknown): string {
@@ -20,23 +20,26 @@ function messageOf(cause: unknown): string {
  * external_id를 주므로(실측 7쌍 전부) 새 행으로 들어와 정상 수집·채점된다.
  */
 export function createRecheckNode(
-  deps: { store: Store; source: JobSource },
+  deps: { store: Store; sources: SourceRegistry },
 ): Node<Job, string> {
   return {
     name: 'recheck',
 
     async run(job): Promise<NodeResult<string>> {
+      const source = deps.sources[job.source]
+      if (!source) return fail('UNKNOWN_SOURCE', `등록되지 않은 소스: ${job.source}`, false)
+
       let raw: Awaited<ReturnType<JobSource['fetchDetail']>>
       try {
-        raw = await deps.source.fetchDetail(job.externalId)
+        raw = await source.fetchDetail(job.externalId)
       } catch (cause) {
         const retryable = cause instanceof SourceHttpError ? cause.retryable : false
         return fail('SOURCE_HTTP', messageOf(cause), retryable)
       }
 
-      let state: ReturnType<typeof parseJobOpenState>
+      let state: ReturnType<JobSource['parseOpenState']>
       try {
-        state = parseJobOpenState(raw)
+        state = source.parseOpenState(raw)
       } catch (cause) {
         return fail('PARSE_FAILED', messageOf(cause), false)
       }
