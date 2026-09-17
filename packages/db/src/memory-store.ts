@@ -2,7 +2,7 @@ import { compareDashboardOrder } from './dashboard-order.js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  CompanyRating, CompanyRatingResult, DashboardRow,
+  CompanyRating, CompanyRatingResult, DashboardRow, DedupCandidate,
   Job, JobDetail, JobDetailFields, JobRecheck, NewJob, NodeRunEntry, Notification,
   NotifyPendingRow,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
@@ -78,6 +78,7 @@ export class MemoryStore implements Store {
         detailError: null,
         bookmarked: false,
         hidden: false,
+        duplicateOf: null,
       }
       this.jobs.set(job.id, job)
       created.push(job)
@@ -121,6 +122,7 @@ export class MemoryStore implements Store {
     return [...this.jobs.values()]
       .filter((j) => {
         if (j.detailStatus !== 'ok') return false
+        if (j.duplicateOf !== null) return false
         const score = this.scores.get(j.id)
         if (!score) return true
         return score.status === 'failed' && score.attempts < MAX_ATTEMPTS
@@ -165,7 +167,7 @@ export class MemoryStore implements Store {
     for (const score of this.scores.values()) {
       if (score.status !== 'ok' || score.notifiedAt !== null) continue
       const job = this.jobs.get(score.jobId)
-      if (job && !job.hidden) out.push({ job, score })
+      if (job && !job.hidden && job.duplicateOf === null) out.push({ job, score })
     }
     return out
       .sort((a, b) => b.score.total - a.score.total)
@@ -217,6 +219,8 @@ export class MemoryStore implements Store {
     // SupabaseStore와 같은 규칙: 목록은 제외 여부로 갈리고 한 페이지에 두 값이
     // 섞이지 않는다.
     const hidden = params.hiddenOnly === true
+    // 중복 여부도 같은 방식의 배타 버킷이다 — 기본은 중복 아닌 것만, true면 중복만.
+    const duplicatesOnly = params.duplicatesOnly === true
     // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다 — 소속이 다르면 버린다.
     const cursor = params.cursor && params.cursor.hidden === hidden ? params.cursor : undefined
     const rows = [...this.scores.values()]
@@ -224,6 +228,7 @@ export class MemoryStore implements Store {
       .filter(({ job, score }) =>
         job && score.status === 'ok'
         && job.hidden === hidden
+        && (job.duplicateOf !== null) === duplicatesOnly
         && (params.minScore === undefined || score.total >= params.minScore)
         && (!params.bookmarkedOnly || job.bookmarked)
         && (!params.unnotifiedOnly || score.notifiedAt === null))
@@ -391,4 +396,19 @@ export class MemoryStore implements Store {
     if (run) run.endedAt = new Date(0).toISOString()
   }
   async recordNodeRun(entry: NodeRunEntry) { this.nodeRuns.push(entry) }
+
+  async listDedupIndex(): Promise<DedupCandidate[]> {
+    return [...this.jobs.values()]
+      .filter((j) => j.duplicateOf === null && !j.hidden)
+      .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt) || a.id.localeCompare(b.id))
+      .map((j) => ({ id: j.id, source: j.source, companyName: j.companyName, position: j.position }))
+  }
+
+  async markDuplicates(pairs: Array<{ jobId: string; duplicateOf: string }>) {
+    for (const { jobId, duplicateOf } of pairs) {
+      const job = this.jobs.get(jobId)
+      if (!job) continue
+      this.jobs.set(jobId, { ...job, duplicateOf })
+    }
+  }
 }

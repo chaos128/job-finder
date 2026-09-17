@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  DedupCandidate, Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
   CompanyRating, CompanyRatingResult, JobDetail, JobRecheck,
   NotifyPendingRow, NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source, UnscoredJobs,
@@ -34,7 +34,7 @@ const NOTIFY_PENDING_SELECT = 'total, jobs!inner(due_time)' as const
 const NOTIFY_CANDIDATE_SELECT = `*, jobs(
   id, source, external_id, position, company_name, company_id,
   address_district, address_full, url, due_time, first_seen_at,
-  detail_status, detail_attempts, detail_error, bookmarked, hidden
+  detail_status, detail_attempts, detail_error, bookmarked, hidden, duplicate_of
 )`
 
 // raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning도 뺐다 —
@@ -54,6 +54,7 @@ interface JobRow {
   skill_tags: string[]; raw: unknown; first_seen_at: string
   detail_status: string; detail_attempts: number; detail_error: string | null
   bookmarked: boolean; hidden: boolean
+  duplicate_of: string | null
 }
 
 interface SearchRow {
@@ -132,6 +133,7 @@ function toJob(row: DigestJobRow & Partial<Pick<JobRow, DetailColumns>>): Job {
     detailError: row.detail_error,
     bookmarked: row.bookmarked,
     hidden: row.hidden,
+    duplicateOf: row.duplicate_of,
   }
 }
 
@@ -338,12 +340,17 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
     async listNotifyCandidates(): Promise<ScoredJob[]> {
       const rows = unwrap<ScoreWithJobRow[]>(
         await db.from('scores').select(NOTIFY_CANDIDATE_SELECT)
-          .eq('status', 'ok').is('notified_at', null)
+          .eq('status', 'ok').is('notified_at', null).is('jobs.duplicate_of', null)
           .order('total', { ascending: false }).limit(NOTIFY_CANDIDATE_LIMIT),
       )
 
+      // jobs는 !inner가 아닌 평범한 embed라, 필터에 안 맞는 행은 null이 되어
+      // 돌아올 뿐 부모(score) 행 자체가 빠지지는 않는다 — r.jobs 존재 확인이
+      // 이미 hidden과 duplicate_of 불일치를 함께 걸러낸다. duplicate_of를
+      // 명시로 한 번 더 확인하는 것은 이 스토어가 실 Supabase로 테스트되지
+      // 않는 환경이라 붙인 방어선이다(중복이 새어 나가면 다이제스트 슬롯을 뺏는다).
       return rows
-        .filter((r) => r.jobs && !r.jobs.hidden)
+        .filter((r) => r.jobs && !r.jobs.hidden && r.jobs.duplicate_of === null)
         .map((r) => ({ job: toJob(r.jobs), score: toScore(r) }))
     },
 
@@ -358,6 +365,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       const rows = unwrap<Row[]>(
         await db.from('scores').select<typeof NOTIFY_PENDING_SELECT, Row>(NOTIFY_PENDING_SELECT)
           .eq('status', 'ok').is('notified_at', null).eq('jobs.hidden', false)
+          .is('jobs.duplicate_of', null)
           .order('total', { ascending: false }).limit(NOTIFY_CANDIDATE_LIMIT),
       )
       return rows.map((r) => ({ total: r.total, dueTime: r.jobs.due_time }))
@@ -416,6 +424,8 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       //  PostgREST의 or()/and() 로직 트리 파서가 임베드 컬럼 참조를 못 받아
       //  `jobs.hidden`을 커서에 섞을 수 없었기 때문인데, 이제 필요가 없어졌다.)
       const hidden = params.hiddenOnly === true
+      // 중복 여부도 같은 방식의 배타 버킷이다 — 기본은 중복 아닌 것만, true면 중복만.
+      const duplicatesOnly = params.duplicatesOnly === true
 
       // `!inner` + 명시적 컬럼 목록이라 select 문자열에 `*`가 없다 — postgrest-js는
       // Database 제네릭 없이는 1:1 embed의 카디널리티를 알 수 없어 jobs를 배열로
@@ -425,6 +435,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         .order('total', { ascending: false })
         .order('job_id', { ascending: false })
         .limit(params.limit)
+      q = duplicatesOnly ? q.not('jobs.duplicate_of', 'is', null) : q.is('jobs.duplicate_of', null)
       if (params.minScore !== undefined) q = q.gte('total', params.minScore)
       if (params.bookmarkedOnly) q = q.eq('jobs.bookmarked', true)
       if (params.unnotifiedOnly) q = q.is('notified_at', null)
@@ -646,6 +657,32 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         ...(rows[0] ? {} : { status: 'not_found', fetched_at: new Date(0).toISOString() }),
       }, { onConflict: 'company_name' })
       if (error) throw new Error(error.message)
+    },
+
+    async listDedupIndex(): Promise<DedupCandidate[]> {
+      // 전량을 받아 JS에서 맞춘다. listCompaniesNeedingRating과 같은 방식으로,
+      // 수백 행 규모라 페이로드가 작고 정규화 규칙이 SQL로 새어 나가지 않는다.
+      const rows = unwrap<Array<{
+        id: string; source: Source; company_name: string; position: string
+      }>>(
+        await db.from('jobs').select('id, source, company_name, position')
+          .is('duplicate_of', null).eq('hidden', false)
+          .order('first_seen_at', { ascending: true }).order('id', { ascending: true }),
+      )
+      return rows.map((r) => ({
+        id: r.id, source: r.source, companyName: r.company_name, position: r.position,
+      }))
+    },
+
+    async markDuplicates(pairs: Array<{ jobId: string; duplicateOf: string }>) {
+      // 건별 update다. 한 실행에서 나오는 중복은 많아야 몇 건이고,
+      // PostgREST의 배치 update는 같은 값으로만 가능해 쌍마다 다른 값을 못 싣는다.
+      for (const { jobId, duplicateOf } of pairs) {
+        if (!isUuid(jobId) || !isUuid(duplicateOf)) continue
+        const { error } = await db.from('jobs')
+          .update({ duplicate_of: duplicateOf }).eq('id', jobId)
+        if (error) throw new Error(error.message)
+      }
     },
 
     async startRun(pipeline: RunPipeline, trigger: RunTrigger) {

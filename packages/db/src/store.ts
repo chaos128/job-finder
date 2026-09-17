@@ -1,6 +1,7 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  CompanyRatingResult, Job, JobDetail, JobDetailFields, JobRecheck, NewJob, NodeRunEntry,
+  CompanyRatingResult, DedupCandidate, Job, JobDetail, JobDetailFields, JobRecheck, NewJob,
+  NodeRunEntry,
   Notification,
   NotifyPendingRow,
   Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source, UnscoredJobs,
@@ -79,6 +80,18 @@ export interface Store {
    * 제외를 풀지는 않는다(자동화가 사람의 결정을 덮어쓰지 않는다는 같은 원칙).
    */
   recordJobRecheck(jobId: string, result: JobRecheck): Promise<void>
+
+  // ── 교차 중복
+  /**
+   * 중복 판정 후보. duplicate_of가 null이고 hidden이 아닌 행만 오래된 순으로 준다.
+   *
+   * hidden을 빼는 것이 중요하다 — recheck는 "같은 공고가 다시 올라오면 소스가 새
+   * external_id를 주므로 새 행으로 정상 수집·채점된다"를 보장한다. 마감돼 숨겨진
+   * 행을 후보로 두면 재등록분이 그 옛 행의 중복으로 찍혀 영원히 채점되지 않는다.
+   */
+  listDedupIndex(): Promise<DedupCandidate[]>
+  /** 새로 만든 행을 기존 행의 중복으로 표시한다. */
+  markDuplicates(pairs: Array<{ jobId: string; duplicateOf: string }>): Promise<void>
 
   // ── 관측
   /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */

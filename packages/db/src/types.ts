@@ -86,7 +86,12 @@ export interface Job extends NewJob, Partial<JobDetailFields> {
   detailError: string | null
   bookmarked: boolean
   hidden: boolean
+  /** 이 공고가 중복인 경우 원본 job id. null이면 중복이 아니다. */
+  duplicateOf: string | null
 }
+
+/** 중복 판정에 필요한 최소 컬럼. 전량을 받아 JS에서 맞추므로 좁게 잡는다. */
+export type DedupCandidate = Pick<Job, 'id' | 'source' | 'companyName' | 'position'>
 
 export interface ScoreInput {
   jobId: string
@@ -214,6 +219,11 @@ export interface DashboardFilters {
    * 어느 쪽이든 한쪽만 주므로 한 페이지 안에 두 값이 섞이지 않는다.
    */
   hiddenOnly?: boolean
+  /**
+   * true면 중복으로 표시된 공고만, 아니면 중복이 아닌 것만 준다.
+   * hiddenOnly와 같은 배타 버킷이라 한 페이지에 두 값이 섞이지 않는다.
+   */
+  duplicatesOnly?: boolean
 }
 
 export interface DashboardPage {

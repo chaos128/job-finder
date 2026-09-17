@@ -700,5 +700,43 @@ export function describeStoreContract(
         expect(await store.listCompaniesNeedingRating(10, 30)).toEqual([])
       })
     })
+
+    describe('교차 중복', () => {
+      test('중복 인덱스는 중복 아니고 제외 안 된 행만, 오래된 순으로 준다', async () => {
+        const [a, b, c] = await store.insertJobs([
+          { ...job('a'), companyName: '루닛', position: 'FE' },
+          { ...job('b'), source: 'remember', companyName: '루닛', position: 'FE' },
+          { ...job('c'), companyName: '토스', position: 'BE' },
+        ])
+        await store.setJobHidden(c!.id, true)
+        await store.markDuplicates([{ jobId: b!.id, duplicateOf: a!.id }])
+
+        const index = await store.listDedupIndex()
+        expect(index.map((r) => r.id)).toEqual([a!.id])
+      })
+
+      // 마감돼 숨겨진 옛 행이 후보로 남으면, 새 external_id로 다시 올라온 공고가
+      // 그 옛 행의 중복으로 찍혀 영원히 채점되지 않는다. recheck가 세운 보장이 깨진다.
+      test('중복으로 표시된 공고는 채점 대기에서 빠진다', async () => {
+        const [a, b] = await store.insertJobs([
+          job('a'),
+          { ...job('b'), source: 'remember' },
+        ])
+        await store.saveJobDetail(a!.id, {
+          annualFrom: 5, annualTo: 100,
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.saveJobDetail(b!.id, {
+          annualFrom: 5, annualTo: 100,
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.markDuplicates([{ jobId: b!.id, duplicateOf: a!.id }])
+
+        const needing = await store.listJobsNeedingScore(10)
+        expect(needing.map((j) => j.id)).toEqual([a!.id])
+      })
+    })
   })
 }
