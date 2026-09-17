@@ -28,11 +28,16 @@ function source(overrides: Partial<JobSource> = {}): JobSource {
 test('열린 공고는 닫히지 않은 것으로 기록한다', async () => {
   const store = new MemoryStore()
   const job = await seedJob(store)
-  const node = createRecheckNode({ store, sources: { wanted: source() } })
+  // dueTime을 시드값(null)과 다르게 둬서, recordJobRecheck가 실제로 호출됐는지를
+  // 검증한다 — hidden:false만 보면 seed 기본값을 그대로 읽어도 통과해버린다.
+  const node = createRecheckNode({
+    store, sources: { wanted: source({ parseOpenState: () => ({ closed: false, dueTime: '2026-10-01' }) }) },
+  })
   const result = await node.run(job, { runId: 'run_1' })
 
   expect(result).toMatchObject({ ok: true })
   expect(store.jobs.get(job.id)!.hidden).toBe(false)
+  expect(store.jobs.get(job.id)!.dueTime).toBe('2026-10-01')
 })
 
 test('닫힌 공고는 hidden으로 기록한다', async () => {

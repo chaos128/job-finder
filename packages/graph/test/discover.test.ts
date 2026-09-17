@@ -165,6 +165,17 @@ test('search.source와 search.params.source가 어긋나면 SOURCE_MISMATCH로 �
   expect(result).toMatchObject({ ok: false, retryable: false, error: { code: 'SOURCE_MISMATCH' } })
 })
 
+test('search.params가 null이어도 throw하지 않고 SOURCE_MISMATCH로 실패한다', async () => {
+  // params는 DB에서 not null이지만 'null'::jsonb(=JS null)까지는 막지 못하고,
+  // 검색 행은 사람이 SQL Editor로 손수 넣는다 — 그 경우를 흉내낸다.
+  const store = new MemoryStore()
+  const nullParams: Search = { ...search, params: null as unknown as Search['params'] }
+  const node = createDiscoverNode({ store, sources: { wanted: fakeSource([ref('1')]) } })
+  const result = await node.run(nullParams, { runId: 'run_1' })
+
+  expect(result).toMatchObject({ ok: false, retryable: false, error: { code: 'SOURCE_MISMATCH' } })
+})
+
 test('runner를 통해 여러 검색을 처리한다', async () => {
   const store = new MemoryStore()
   const runId = await store.startRun('collect', 'cron')

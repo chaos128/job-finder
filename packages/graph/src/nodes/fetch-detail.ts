@@ -34,12 +34,13 @@ export function createFetchDetailNode(
     name: 'fetchDetail',
 
     async run(job) {
+      // reportFailure(→ recordDetailFailure)가 아니라 바로 fail한다: 이건 이 공고를
+      // 몇 번 다시 가져와도 똑같이 실패할 소스 문제가 아니라 아직 배포되지 않은
+      // 레지스트리 문제다. attempts를 올리면 배포 후에도 3회 만에 detail_status가
+      // 'failed'로 굳어 이 공고가 영영 재수집되지 않는다 — discover/recheck와
+      // 같은 모양으로 둔다.
       const source = deps.sources[job.source]
-      if (!source) {
-        return reportFailure(
-          deps.store, job.id, 'UNKNOWN_SOURCE', `등록되지 않은 소스: ${job.source}`, false,
-        )
-      }
+      if (!source) return fail('UNKNOWN_SOURCE', `등록되지 않은 소스: ${job.source}`, false)
 
       let raw: Awaited<ReturnType<JobSource['fetchDetail']>>
       try {

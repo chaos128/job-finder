@@ -22,10 +22,13 @@ export function createDiscoverNode(
       // search.source(라우팅 컬럼)와 search.params.source(유니온 판별자)는 각자 따로
       // 값을 바꿀 수 있는 별개 필드다. 어긋나면 엉뚱한 구현이 잘못된 모양의 params를
       // 받아 조용히 쓰레기 URL을 만들 수 있으므로, 조용히 틀리는 대신 여기서 실패한다.
-      if (search.params.source !== search.source) {
+      // params는 DB에서 `jsonb not null`이지만 `'null'::jsonb`(JS null)까지 막지는
+      // 않고, 검색 행은 사람이 SQL Editor로 손수 넣는다 — ?.로 접근해 그 값도
+      // try 밖에서 node를 throw시키지 않고 SOURCE_MISMATCH로 눕힌다.
+      if (search.params?.source !== search.source) {
         return fail(
           'SOURCE_MISMATCH',
-          `search.source(${search.source})와 search.params.source(${search.params.source})가 다르다`,
+          `search.source(${search.source})와 search.params.source(${search.params?.source})가 다르다`,
           false,
         )
       }

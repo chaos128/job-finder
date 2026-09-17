@@ -148,6 +148,9 @@ test('레지스트리에 없는 소스는 UNKNOWN_SOURCE로 실패한다 (throw�
   const result = await node.run(job!, { runId: 'run_1' })
 
   expect(result).toMatchObject({ ok: false, retryable: false, error: { code: 'UNKNOWN_SOURCE' } })
+  // 시도 횟수를 올리면 안 된다 — 이건 배포로 고쳐질 문제지, 이 공고가 영원히
+  // 같은 이유로 실패할 문제가 아니다. 올렸다면 3회 만에 영구 실패로 굳는다.
+  expect(store.jobs.get(job!.id)!.detailAttempts).toBe(0)
 })
 
 test('recordDetailFailure마저 실패해도 원래 실패 사유를 그대로 보고한다', async () => {
