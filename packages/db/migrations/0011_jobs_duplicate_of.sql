@@ -24,6 +24,14 @@ create index if not exists jobs_dedup_idx
 -- 중복은 채점하지 않는다. 뷰를 다시 만들어야 하는데, security_invoker를 빠뜨리면
 -- 뷰가 소유자 권한(BYPASSRLS)으로 돌아 anon이 이 뷰로 jobs를 전부 읽게 된다.
 -- 0001의 주석이 경고한 그 구멍이다 — 아래 옵션을 지우지 마라.
+--
+-- drop과 create를 트랜잭션으로 묶는다. 둘 사이에 뷰가 없는 순간이 생기면 그때
+-- /api/scoring/pending이 깨진다 — 채점 routine이 대기 목록을 받는 유일한 경로다.
+-- Supabase SQL Editor가 이 파일을 "destructive operations" 경고로 띄우는데,
+-- drop 대상이 데이터가 아니라 뷰(저장된 질의)이고 cascade도 없어서 의존 객체가
+-- 있었다면 연쇄 삭제가 아니라 에러로 멈춘다. 경고는 키워드 매칭이다.
+begin;
+
 drop view if exists jobs_needing_score;
 create view jobs_needing_score
   with (security_invoker = true) as
@@ -32,3 +40,5 @@ create view jobs_needing_score
   where j.detail_status = 'ok'
     and j.duplicate_of is null
     and (s.job_id is null or (s.status = 'failed' and s.attempts < 3));
+
+commit;
