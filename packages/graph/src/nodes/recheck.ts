@@ -1,5 +1,5 @@
 import type { Job, Store } from '@job-finder/db'
-import { WantedHttpError, parseJobOpenState, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, parseJobOpenState, type JobSource } from '@job-finder/sources'
 import { fail, ok, type Node, type NodeResult } from '../core/node.js'
 
 function messageOf(cause: unknown): string {
@@ -30,8 +30,8 @@ export function createRecheckNode(
       try {
         raw = await deps.source.fetchDetail(job.externalId)
       } catch (cause) {
-        const retryable = cause instanceof WantedHttpError ? cause.retryable : false
-        return fail('WANTED_HTTP', messageOf(cause), retryable)
+        const retryable = cause instanceof SourceHttpError ? cause.retryable : false
+        return fail('SOURCE_HTTP', messageOf(cause), retryable)
       }
 
       let state: ReturnType<typeof parseJobOpenState>

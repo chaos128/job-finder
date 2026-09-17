@@ -1,5 +1,5 @@
 import type { NewJob, Search, Store } from '@job-finder/db'
-import { WantedHttpError, type ExternalRef, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, type ExternalRef, type JobSource } from '@job-finder/sources'
 import { fail, ok, type Node } from '../core/node.js'
 
 export interface DiscoverResult {
@@ -21,8 +21,8 @@ export function createDiscoverNode(
       try {
         for await (const ref of deps.source.listRefs(search.params)) refs.push(ref)
       } catch (cause) {
-        if (cause instanceof WantedHttpError) {
-          return fail('WANTED_HTTP', cause.message, cause.retryable)
+        if (cause instanceof SourceHttpError) {
+          return fail('SOURCE_HTTP', cause.message, cause.retryable)
         }
         return fail('DISCOVER_FAILED', String(cause), false)
       }

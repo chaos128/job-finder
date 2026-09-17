@@ -1,5 +1,5 @@
 import type { Job, Store } from '@job-finder/db'
-import { WantedHttpError, type JobSource } from '@job-finder/sources'
+import { SourceHttpError, type JobSource } from '@job-finder/sources'
 import { fail, ok, type Node, type NodeResult } from '../core/node.js'
 
 function messageOf(cause: unknown): string {
@@ -38,8 +38,8 @@ export function createFetchDetailNode(
       try {
         raw = await deps.source.fetchDetail(job.externalId)
       } catch (cause) {
-        const retryable = cause instanceof WantedHttpError ? cause.retryable : false
-        return reportFailure(deps.store, job.id, 'WANTED_HTTP', messageOf(cause), retryable)
+        const retryable = cause instanceof SourceHttpError ? cause.retryable : false
+        return reportFailure(deps.store, job.id, 'SOURCE_HTTP', messageOf(cause), retryable)
       }
 
       let fields: ReturnType<JobSource['normalize']>

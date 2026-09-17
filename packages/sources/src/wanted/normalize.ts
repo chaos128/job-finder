@@ -1,5 +1,6 @@
 import type { JobDetailFields } from '@job-finder/db'
 import { z } from 'zod'
+import { normalizeDueTime } from '../date.js'
 import type { ExternalRef, RawDetail } from '../types.js'
 
 const listItemSchema = z.object({
@@ -39,28 +40,6 @@ const detailSchema = z.object({
     skill_tags: z.array(z.object({ title: z.string() })).nullable().optional(),
   }),
 })
-
-/**
- * jobs.due_time is a Postgres `date` column: keep only a real calendar date's
- * YYYY-MM-DD prefix, else null. A shape-only regex would let "2026-02-30" through
- * (Postgres would then abort the whole batch insert with 22007), so the extracted
- * date is round-tripped through `Date` to confirm it doesn't overflow into another day.
- */
-function normalizeDueTime(raw: string | null | undefined): string | null {
-  if (!raw) return null
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
-  if (!match) return null
-  const dateStr = match[0]!
-  const year = Number(match[1]!)
-  const month = Number(match[2]!)
-  const day = Number(match[3]!)
-  const roundTrip = new Date(Date.UTC(year, month - 1, day))
-  const isRealDate =
-    roundTrip.getUTCFullYear() === year &&
-    roundTrip.getUTCMonth() === month - 1 &&
-    roundTrip.getUTCDate() === day
-  return isRealDate ? dateStr : null
-}
 
 export function parseListPage(payload: unknown): {
   refs: ExternalRef[]

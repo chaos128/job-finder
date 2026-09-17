@@ -1,4 +1,6 @@
 export * from './types.js'
+export { normalizeDueTime } from './date.js'
+export { SourceHttpError } from './http.js'
 export { MAX_YEARS, buildWantedListUrl, parseWantedSearchUrl } from './wanted/parse-url.js'
 export {
   normalizeWantedDetail, parseJobOpenState, parseListPage, type JobOpenState,

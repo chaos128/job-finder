@@ -121,6 +121,6 @@ test('recordDetailFailure마저 실패해도 원래 실패 사유를 그대로 �
   await expect(node.run(job, { runId: 'run_1' })).resolves.toMatchObject({
     ok: false,
     retryable: false,
-    error: { code: 'WANTED_HTTP' },
+    error: { code: 'SOURCE_HTTP' },
   })
 })

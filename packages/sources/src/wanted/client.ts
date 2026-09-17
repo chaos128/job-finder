@@ -1,3 +1,5 @@
+import { SourceHttpError } from '../http.js'
+
 const ORIGIN = 'https://www.wanted.co.kr'
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -10,14 +12,10 @@ const UA =
  * mailer(send.ts)의 20초와 같은 방식이고, 여기는 건별 호출이라 더 짧게 잡았다. */
 const REQUEST_TIMEOUT_MS = 15_000
 
-export class WantedHttpError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message)
+export class WantedHttpError extends SourceHttpError {
+  constructor(status: number, message: string) {
+    super(status, message)
     this.name = 'WantedHttpError'
-  }
-  /** 5xx·429·타임아웃만 재시도 가치가 있다. 404/422는 영구 실패. */
-  get retryable() {
-    return this.status >= 500 || this.status === 429 || this.status === 0
   }
 }
 
