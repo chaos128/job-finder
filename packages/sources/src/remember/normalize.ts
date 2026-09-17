@@ -12,7 +12,7 @@ const NO_UPPER_BOUND = 100
  * 않게 해서, 로그를 읽는 사람이 "서버가 이 필터를 무시했다"와 "애초에 확인할 방법이
  * 없었다"를 구분하게 한다.
  */
-const NO_QUERY_ECHO = 'no_query_echo'
+export const NO_QUERY_ECHO = 'no_query_echo'
 
 const listItemSchema = z.object({
   id: z.number(),

@@ -1,6 +1,6 @@
 import { createSupabaseStore } from '@job-finder/db'
 import { RATING_STALE_DAYS, runCollect } from '@job-finder/graph'
-import { createSourceRegistry, parseWantedSearchUrl } from '@job-finder/sources'
+import { createSourceRegistry, parseRememberSearchUrl, parseWantedSearchUrl } from '@job-finder/sources'
 
 const DETAIL_BATCH = 25
 
@@ -19,12 +19,17 @@ async function main() {
   const urlArg = process.argv.indexOf('--url')
   if (urlArg !== -1) {
     const url = process.argv[urlArg + 1]
-    if (!url) throw new Error('--url 뒤에 Wanted 검색 URL이 필요합니다')
-    const params = parseWantedSearchUrl(url)
+    if (!url) throw new Error('--url 뒤에 검색 URL이 필요합니다')
+    // 어느 사이트의 URL인지는 호스트로 정한다. 사람이 --source를 타이핑하게 하면
+    // params 모양과 어긋난 행이 만들어질 수 있다.
+    const params = url.includes('rememberapp.co.kr')
+      ? parseRememberSearchUrl(url)
+      : parseWantedSearchUrl(url)
     console.log('검색 등록:', JSON.stringify(params))
     console.log(
       'Supabase SQL Editor에서 실행하세요:\n' +
-      `insert into searches (url, params) values (${quote(url)}, ${quote(JSON.stringify(params))}::jsonb);`,
+      `insert into searches (source, url, params) values (` +
+      `${quote(params.source)}, ${quote(url)}, ${quote(JSON.stringify(params))}::jsonb);`,
     )
     return
   }
