@@ -152,6 +152,20 @@ describe('SupabaseStore.listDedupIndex', () => {
   })
 })
 
+describe('SupabaseStore.listJobsNeedingRecheck', () => {
+  // 중복을 재확인하면 답을 읽는 화면이 없는데도 남의 서버로 요청이 나간다 —
+  // 상세 조회와 달리 staleDays마다 영구 반복이라, 실측 149건 중 21건이 연 1,000회를
+  // 넘겼다. 계약 수트는 MemoryStore만 돌아 이 필터를 여기서 못 박는다.
+  test('duplicate_of=is.null 필터를 싣는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listJobsNeedingRecheck(10, 7)
+    const url = decodeURIComponent(urls[0]!)
+    expect(url).toContain('duplicate_of=is.null')
+    expect(url).toContain('hidden=eq.false')
+    expect(url).toContain('detail_status=eq.ok')
+  })
+})
+
 describe('SupabaseStore.listNotifyPending', () => {
   test('jobs.duplicate_of=is.null 필터를 싣는다', async () => {
     const urls = captureRequestUrls()

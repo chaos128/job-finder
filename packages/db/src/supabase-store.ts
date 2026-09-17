@@ -633,7 +633,10 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000).toISOString()
       const rows = unwrap<JobRow[]>(
         await db.from('jobs').select('*')
-          .eq('hidden', false).eq('detail_status', 'ok')
+          // 중복은 재확인하지 않는다 — 채점·발송·기본 목록 어디에도 안 나오므로
+          // 답을 읽는 화면이 없는데, 재확인은 staleDays마다 영구 반복된다.
+          // (jobs_recheck_idx의 부분 인덱스 조건보다 좁으므로 인덱스는 그대로 쓰인다.)
+          .eq('hidden', false).is('duplicate_of', null).eq('detail_status', 'ok')
           .or(`rechecked_at.is.null,rechecked_at.lte.${cutoff}`)
           .order('rechecked_at', { ascending: true, nullsFirst: true })
           .limit(limit),

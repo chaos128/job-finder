@@ -349,7 +349,10 @@ export class MemoryStore implements Store {
   async listJobsNeedingRecheck(limit: number, staleDays: number): Promise<Job[]> {
     const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000
     return [...this.jobs.values()]
-      .filter((j) => !j.hidden && j.detailStatus === 'ok')
+      // 중복을 빼는 이유(SupabaseStore와 같은 조건): 중복은 채점·발송·기본 목록
+      // 어디에도 안 나오므로 아직 열려 있는지 확인해봐야 그 답을 읽는 화면이 없다.
+      // 상세 조회와 달리 재확인은 staleDays마다 영구 반복이라 비용 구조가 다르다.
+      .filter((j) => !j.hidden && j.duplicateOf === null && j.detailStatus === 'ok')
       .filter((j) => {
         const at = this.recheckedAt.get(j.id)
         return at === undefined || Date.parse(at) <= cutoff

@@ -659,6 +659,18 @@ export function describeStoreContract(
         expect(targets.map((j) => j.id)).toEqual([a.id])
       })
 
+      // 중복은 채점·발송·기본 목록 어디에도 안 나오므로, 아직 열려 있는지 확인해봐야
+      // 그 답을 읽는 화면이 없다. 상세 조회는 공고당 한 번이라 두고 보지만 재확인은
+      // staleDays마다 영구히 반복된다 — 실측 149건 중 21건(14%)이 중복이었고,
+      // 7일 주기로 연 1,000회가 넘는 요청이 남의 서버로 나간다.
+      test('중복으로 표시된 공고는 재확인 대상이 아니다', async () => {
+        const a = await withDetail('1')
+        const b = await withDetail('2')
+        await store.markDuplicates([{ jobId: b.id, duplicateOf: a.id }])
+        const targets = await store.listJobsNeedingRecheck(10, 0)
+        expect(targets.map((j) => j.id)).toEqual([a.id])
+      })
+
       // 상세를 받는 것 자체가 모집 상태를 확인한 것이다. 이걸 안 남기면 방금 수집한
       // 공고가 같은 실행의 재확인 노드에 잡혀 같은 API를 한 번 더 부른다.
       test('방금 상세를 받은 공고는 곧바로 재확인 대상이 되지 않는다', async () => {
