@@ -209,21 +209,26 @@ export class MemoryStore implements Store {
   async listDashboardJobs(
     params: DashboardFilters & { cursor?: DashboardCursor; limit: number },
   ): Promise<DashboardPage> {
+    // SupabaseStore와 같은 규칙: 목록은 제외 여부로 갈리고 한 페이지에 두 값이
+    // 섞이지 않는다.
+    const hidden = params.hiddenOnly === true
+    // 필터를 바꾸면 이전 목록의 커서가 남아 있을 수 있다 — 소속이 다르면 버린다.
+    const cursor = params.cursor && params.cursor.hidden === hidden ? params.cursor : undefined
     const rows = [...this.scores.values()]
       .map((score) => ({ score, job: this.jobs.get(score.jobId)! }))
       .filter(({ job, score }) =>
         job && score.status === 'ok'
+        && job.hidden === hidden
         && (params.minScore === undefined || score.total >= params.minScore)
         && (!params.bookmarkedOnly || job.bookmarked)
         && (!params.unnotifiedOnly || score.notifiedAt === null))
-      // SupabaseStore와 같은 순서여야 한다 — 제외된 공고는 맨 뒤, 그 안에서는
-      // 동점을 jobId 내림차순으로 가른다.
+      // SupabaseStore와 같은 순서여야 한다 — 동점은 jobId 내림차순으로 가른다.
       .sort((a, b) => compareDashboardOrder(
         { hidden: a.job.hidden, total: a.score.total, jobId: a.job.id },
         { hidden: b.job.hidden, total: b.score.total, jobId: b.job.id },
       ))
-      .filter(({ job, score }) => !params.cursor || compareDashboardOrder(
-        { hidden: job.hidden, total: score.total, jobId: job.id }, params.cursor,
+      .filter(({ job, score }) => !cursor || compareDashboardOrder(
+        { hidden: job.hidden, total: score.total, jobId: job.id }, cursor,
       ) > 0)
       .slice(0, params.limit)
       .map(({ job, score }) => ({

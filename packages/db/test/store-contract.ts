@@ -260,13 +260,15 @@ export function describeStoreContract(
     // 같은 이유로, hidden을 커서에 안 넣으면 이 경계에서 행이 누락되거나 중복된다.
     // limit=2로 5행(동점 4 + 별도 1행, 그중 2행 제외)을 페이징해 경계가 페이지
     // 중간에 걸리게 만든다.
-    test('제외(hidden) 경계를 넘어가도 누락도 중복도 없다', async () => {
+    // 목록이 제외 여부로 갈리므로, 페이징 중에 반대편 공고가 섞여 들어오면 안 된다.
+    test('기본 목록은 제외된 공고를 한 건도 주지 않는다', async () => {
       const created = await seedScored(store, [
         { ext: '1', total: 74 }, { ext: '2', total: 74 }, { ext: '3', total: 74 },
         { ext: '4', total: 74 }, { ext: '5', total: 60 },
       ])
       await store.setJobHidden(created[0]!.id, true)
       await store.setJobHidden(created[4]!.id, true)
+
       const seen: string[] = []
       let cursor: DashboardCursor | undefined
       for (let guard = 0; guard < 10; guard++) {
@@ -275,14 +277,36 @@ export function describeStoreContract(
         if (!page.nextCursor) break
         cursor = page.nextCursor
       }
-      expect(seen).toHaveLength(5)
-      expect(new Set(seen).size).toBe(5)
-      // 제외된 두 건(created[0], created[4])은 항상 제외 안 된 세 건 뒤에 와야 한다.
-      const hiddenIds = new Set([created[0]!.id, created[4]!.id])
-      const hiddenPositions = seen
-        .map((id, i) => (hiddenIds.has(id) ? i : -1))
-        .filter((i) => i >= 0)
-      expect(Math.min(...hiddenPositions)).toBeGreaterThanOrEqual(3)
+      expect(seen).toHaveLength(3)
+      expect(new Set(seen).size).toBe(3)
+      expect(seen).not.toContain(created[0]!.id)
+      expect(seen).not.toContain(created[4]!.id)
+    })
+
+    test('hiddenOnly면 제외된 공고만 준다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 70 }, { ext: '3', total: 60 },
+      ])
+      await store.setJobHidden(created[0]!.id, true)
+      await store.setJobHidden(created[2]!.id, true)
+
+      const page = await store.listDashboardJobs({ limit: 10, hiddenOnly: true })
+      // 제외된 것만, 그 안에서도 점수 내림차순이다.
+      expect(page.rows.map((r) => r.jobId)).toEqual([created[0]!.id, created[2]!.id])
+      expect(page.rows.every((r) => r.hidden)).toBe(true)
+    })
+
+    // 토글을 바꾸면 이전 목록의 커서가 남는다. 그 커서로 반대편 목록을 태우면
+    // 두 질의 결과가 한 목록에 이어붙어 첫 페이지가 통째로 사라진다.
+    test('반대편 목록의 커서는 무시하고 처음부터 준다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 90 }, { ext: '2', total: 70 },
+      ])
+      await store.setJobHidden(created[0]!.id, true)
+
+      const stale: DashboardCursor = { hidden: false, total: 80, jobId: created[1]!.id }
+      const page = await store.listDashboardJobs({ limit: 10, hiddenOnly: true, cursor: stale })
+      expect(page.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
     })
 
     test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {
@@ -323,14 +347,14 @@ export function describeStoreContract(
       expect((await store.listDashboardJobs({ limit: 10 })).rows[0]!.bookmarked).toBe(false)
     })
 
-    test('setJobHidden은 값을 뒤집고, 켜지면 점수와 무관하게 목록 맨 뒤로 보낸다', async () => {
+    test('setJobHidden은 값을 뒤집고, 켜지면 기본 목록에서 빠진다', async () => {
       const created = await seedScored(store, [
         { ext: '1', total: 90 }, { ext: '2', total: 70 },
       ])
       await store.setJobHidden(created[0]!.id, true)
       const page = await store.listDashboardJobs({ limit: 10 })
-      expect(page.rows.map((r) => r.jobId)).toEqual([created[1]!.id, created[0]!.id])
-      expect(page.rows[1]!.hidden).toBe(true)
+      expect(page.rows.map((r) => r.jobId)).toEqual([created[1]!.id])
+
       await store.setJobHidden(created[0]!.id, false)
       const restored = await store.listDashboardJobs({ limit: 10 })
       expect(restored.rows.map((r) => r.jobId)).toEqual([created[0]!.id, created[1]!.id])

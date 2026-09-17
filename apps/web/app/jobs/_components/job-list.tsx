@@ -13,12 +13,14 @@ import { saveListCache, takeListCache } from './list-cache'
 import { UnscoredList } from './unscored-list'
 
 /**
- * 다음 페이지를 이어붙인다. 단순 concat이 아니라 jobId로 합치고 다시 정렬하는
- * 이유: hidden은 정렬 키라서, 이미 받아온 공고를 제외하면 그 공고가 뒤쪽
- * (hidden 구간)으로 이동해 아직 안 받은 페이지 범위 안으로 들어간다. 그러면
- * 서버가 같은 행을 한 번 더 내려주고 concat은 그대로 중복 렌더한다(운영 168건 ·
- * PAGE_SIZE 100에서 재현: 카드 하나 제외 후 스크롤하면 rows 169 / unique 168,
- * 같은 jobId가 두 자리에 뜨고 key가 충돌한다). 제외 해제도 같은 이유로 겹친다.
+ * 다음 페이지를 이어붙인다. 단순 concat이 아니라 jobId로 합치는 이유: 같은 행이
+ * 두 번 내려오면 concat은 그대로 중복 렌더하고 key가 충돌한다(운영 168건 ·
+ * PAGE_SIZE 100에서 실제로 재현했다 — rows 169 / unique 168).
+ *
+ * 목록이 제외 여부로 갈린 뒤로는 토글 때문에 생기던 중복은 사라졌지만(제외하면 이
+ * 목록에서 빠질 뿐 뒤쪽으로 이동하지 않는다), 북마크·재채점으로 순서가 밀리는
+ * 경계에서는 여전히 겹칠 수 있어 그대로 둔다. 정렬도 유지한다 — 서버가 주는
+ * 순서와 같은 규칙이라 이어붙인 뒤에도 어긋나지 않는다.
  */
 function mergeRows(prev: DashboardRow[], next: DashboardRow[]): DashboardRow[] {
   const seen = new Set(prev.map((r) => r.jobId))
@@ -118,20 +120,17 @@ export function JobList({ initialRows, initialCursor }: {
     })
   }
 
-  // 북마크와 같은 규약: 낙관적으로 먼저 반영, 실패하면 되돌리고 알린다. 다른 점은
-  // hidden이 정렬 키라는 것 — 값만 바꾸면 서버가 주는 순서(맨 뒤)와 어긋나므로
-  // 매번 compareDashboardOrder로 다시 정렬해야 "새로고침 전까지도" 위치가 맞는다.
+  // 북마크와 같은 규약: 낙관적으로 먼저 반영, 실패하면 되돌리고 알린다.
+  // 토글한 카드를 목록에서 빼지 않고 회색으로만 바꿔 제자리에 둔다 — 이제 이 목록에
+  // 속하지 않는 행이지만, 즉시 사라지면 잘못 눌렀을 때 되돌릴 방법이 없다.
+  // 다음 조회(필터 변경·새로고침)에서 자연히 빠진다.
   function onToggleHidden(jobId: string, next: boolean) {
-    setRows((prev) => prev
-      .map((r) => (r.jobId === jobId ? { ...r, hidden: next } : r))
-      .sort(compareDashboardOrder))
+    setRows((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, hidden: next } : r)))
     startTransition(async () => {
       try {
         await toggleHidden(jobId, next)
       } catch (e) {
-        setRows((prev) => prev
-          .map((r) => (r.jobId === jobId ? { ...r, hidden: !next } : r))
-          .sort(compareDashboardOrder))
+        setRows((prev) => prev.map((r) => (r.jobId === jobId ? { ...r, hidden: !next } : r)))
         setError(e instanceof Error ? e.message : String(e))
       }
     })
@@ -184,6 +183,23 @@ export function JobList({ initialRows, initialCursor }: {
           )}
         >
           미발송만
+        </button>
+        {/* 기본 목록에는 제외된 공고가 아예 안 나온다. 이 토글이 그것들을 다시 볼
+            유일한 통로다 — 50점 이하 자동 제외가 있어서 꽤 많이 쌓인다. */}
+        <button
+          type="button"
+          disabled={unscoredOnly}
+          aria-pressed={!!filters.hiddenOnly}
+          onClick={() => setFilters((f) => ({ ...f, hiddenOnly: !f.hiddenOnly }))}
+          className={cn(
+            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'disabled:cursor-not-allowed disabled:opacity-40',
+            filters.hiddenOnly
+              ? 'border-neutral-900 bg-neutral-900 text-white'
+              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+          )}
+        >
+          제외만
         </button>
         <button
           type="button"

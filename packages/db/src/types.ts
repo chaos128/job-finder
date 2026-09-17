@@ -167,12 +167,14 @@ export interface DashboardRow {
 }
 
 /**
- * 커서가 세 값인 이유: 정렬이 `hidden asc, total desc, jobId desc`다 — 제외된
- * 공고는 점수와 무관하게 맨 뒤로 보낸다. 점수 동점도 흔해서(실측 168건이 60개
- * 값에 몰려 있고 151행이 동점, 최대 9행) total 단독 커서로는 페이지 경계에서
- * 행이 누락되거나 중복된다. hidden까지 포함해야 "제외 안 됨 → 제외됨" 경계도
- * 같은 이유로 안전하다. offset도 쓰지 않는다 — 북마크·제외 토글이나 신규
- * 채점으로 순서가 밀린다.
+ * 정렬은 `total desc, jobId desc`다. 점수 동점이 흔해서(실측 168건이 60개 값에
+ * 몰려 있고 151행이 동점, 최대 9행) total 단독 커서로는 페이지 경계에서 행이
+ * 누락되거나 중복된다. offset도 쓰지 않는다 — 북마크·제외 토글이나 신규 채점으로
+ * 순서가 밀린다.
+ *
+ * hidden을 함께 들고 다니는 이유: 목록이 제외 여부로 갈려 있어(hiddenOnly) 커서가
+ * 어느 쪽 목록의 것인지 남겨둬야, 필터를 바꾼 뒤 낡은 커서가 섞여 들어오는 것을
+ * 스토어가 알아볼 수 있다.
  */
 export interface DashboardCursor {
   hidden: boolean
@@ -184,6 +186,11 @@ export interface DashboardFilters {
   minScore?: number
   bookmarkedOnly?: boolean
   unnotifiedOnly?: boolean
+  /**
+   * true면 제외(hidden)된 공고만, 아니면 제외되지 않은 것만 준다.
+   * 어느 쪽이든 한쪽만 주므로 한 페이지 안에 두 값이 섞이지 않는다.
+   */
+  hiddenOnly?: boolean
 }
 
 export interface DashboardPage {
