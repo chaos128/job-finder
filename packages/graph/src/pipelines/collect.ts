@@ -16,6 +16,8 @@ export interface CollectReport {
   searches: number
   found: number
   created: number
+  /** 이번 실행에서 중복으로 표시한 공고 수. */
+  duplicates: number
   detailed: number
   /** Blind 별점을 새로 확정한 회사 수(미등록으로 확정한 것도 포함). */
   rated: number
@@ -109,6 +111,7 @@ export async function runCollect(
       searches: searches.length,
       found: discovered.ok.reduce((sum, r) => sum + r.found, 0),
       created: discovered.ok.reduce((sum, r) => sum + r.created, 0),
+      duplicates: discovered.ok.reduce((sum, r) => sum + r.duplicates, 0),
       detailed: detailed.ok.length,
       rated: rated.ok.length,
       rechecked: rechecked.ok.length,

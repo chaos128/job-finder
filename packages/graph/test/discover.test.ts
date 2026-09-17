@@ -58,7 +58,7 @@ test('신규 공고를 저장하고 검색과 연결한다', async () => {
 
   expect(result).toMatchObject({ ok: true })
   if (!result.ok) throw new Error('unreachable')
-  expect(result.value).toEqual({ searchId: 'search_1', found: 2, created: 2 })
+  expect(result.value).toEqual({ searchId: 'search_1', found: 2, created: 2, duplicates: 0 })
   expect(await store.listJobsNeedingDetail(10)).toHaveLength(2)
   expect(store.hits.size).toBe(2)
 })
@@ -70,7 +70,7 @@ test('두 번 돌려도 중복이 생기지 않는다 (멱등)', async () => {
   const second = await node.run(search, { runId: 'run_2' })
 
   if (!second.ok) throw new Error('unreachable')
-  expect(second.value).toEqual({ searchId: 'search_1', found: 2, created: 0 })
+  expect(second.value).toEqual({ searchId: 'search_1', found: 2, created: 0, duplicates: 0 })
   expect(store.jobs.size).toBe(2)
   expect(store.hits.size).toBe(2)
 })
@@ -114,7 +114,7 @@ test('한 페이징 안의 중복 externalId는 한 번만 저장한다', async 
   const result = await node.run(search, { runId: 'run_1' })
 
   if (!result.ok) throw new Error('unreachable')
-  expect(result.value).toEqual({ searchId: 'search_1', found: 2, created: 1 })
+  expect(result.value).toEqual({ searchId: 'search_1', found: 2, created: 1, duplicates: 0 })
   expect(store.jobs.size).toBe(1)
 })
 
@@ -124,7 +124,7 @@ test('공고가 없는 검색도 크래시 없이 빈 결과를 낸다', async (
   const result = await node.run(search, { runId: 'run_1' })
 
   if (!result.ok) throw new Error('unreachable')
-  expect(result.value).toEqual({ searchId: 'search_1', found: 0, created: 0 })
+  expect(result.value).toEqual({ searchId: 'search_1', found: 0, created: 0, duplicates: 0 })
   expect(store.jobs.size).toBe(0)
   expect(store.hits.size).toBe(0)
 })
@@ -188,4 +188,24 @@ test('runner를 통해 여러 검색을 처리한다', async () => {
   )
   expect(summary.failed).toHaveLength(0)
   expect(store.jobs.size).toBe(1)
+})
+
+// listDedupIndex를 insertJobs **뒤에** 읽으면 이 배치에서 방금 만든 행끼리
+// 서로를 중복으로 지목한다 — 인덱스를 insert 전에 읽어야 하는 이유를 검증한다.
+test('같은 배치 안의 새 행끼리는 중복으로 지목하지 않는다', async () => {
+  const store = new MemoryStore()
+  const refs: ExternalRef[] = ['1', '2'].map((id) => ({
+    externalId: id,
+    job: {
+      externalId: id, position: 'Senior Frontend Engineer', companyName: '루닛',
+      companyId: 1, addressDistrict: '강남구', addressFull: '서울 강남구',
+      url: `https://www.wanted.co.kr/wd/${id}`, dueTime: null,
+    },
+  }))
+  const node = createDiscoverNode({ store, sources: { wanted: fakeSource(refs) } })
+  const result = await node.run(search, { runId: 'run_1' })
+
+  if (!result.ok) throw new Error('unreachable')
+  expect(result.value.duplicates).toBe(0)
+  expect(store.jobs.size).toBe(2)
 })

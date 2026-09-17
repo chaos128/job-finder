@@ -1,5 +1,6 @@
 export * from './core/node.js'
 export * from './core/runner.js'
+export { findDuplicate, normalizeCompany, normalizePosition } from './core/dedup.js'
 export { createDiscoverNode, type DiscoverResult } from './nodes/discover.js'
 export { createFetchDetailNode } from './nodes/fetch-detail.js'
 export { createRecheckNode } from './nodes/recheck.js'

@@ -1,5 +1,6 @@
 import type { NewJob, Search, Store } from '@job-finder/db'
 import { SourceHttpError, type ExternalRef, type SourceRegistry } from '@job-finder/sources'
+import { findDuplicate } from '../core/dedup.js'
 import { fail, ok, type Node } from '../core/node.js'
 
 export interface DiscoverResult {
@@ -8,6 +9,8 @@ export interface DiscoverResult {
   found: number
   /** 이번에 새로 저장된 공고 수 */
   created: number
+  /** 이번에 중복으로 표시한 공고 수. */
+  duplicates: number
 }
 
 export function createDiscoverNode(
@@ -51,12 +54,24 @@ export function createDiscoverNode(
           .filter((r) => !known.has(r.externalId))
           .map((r) => ({ source: source.id, ...r.job }))
 
+        // 인덱스를 insert **전에** 읽는다. 뒤에 읽으면 같은 배치의 새 행끼리
+        // 서로를 중복으로 지목한다.
+        const dedupIndex = await deps.store.listDedupIndex()
         const created = await deps.store.insertJobs(rows)
 
         const jobIds = [...known.values(), ...created.map((j) => j.id)]
         await deps.store.linkSearchHits(search.id, jobIds)
 
-        return ok({ searchId: search.id, found: refs.length, created: created.length })
+        const pairs = created.flatMap((job) => {
+          const original = findDuplicate(job, dedupIndex)
+          return original ? [{ jobId: job.id, duplicateOf: original.id }] : []
+        })
+        if (pairs.length > 0) await deps.store.markDuplicates(pairs)
+
+        return ok({
+          searchId: search.id, found: refs.length, created: created.length,
+          duplicates: pairs.length,
+        })
       } catch (cause) {
         // DB 계층 실패는 일시적 장애로 본다 — Wanted가 파라미터를 거부한 것과
         // 혼동되지 않도록 별도 코드로 분류해, 대시보드가 검색을 잘못 비활성화하지 않게 한다.
