@@ -63,6 +63,27 @@ routine 프롬프트: [docs/routine-prompt.md](docs/routine-prompt.md)
 별점은 **채점에 반영하지 않는다.** 루브릭을 건드리면 기존 전량을 재채점해야 하고,
 커버리지가 56%라 없는 회사가 일괄 감점되는 왜곡이 생긴다.
 
+### 소스는 둘이고, 노드가 행마다 고른다
+
+`packages/sources/src/{wanted,remember}/`가 각각 `JobSource`를 구현하고,
+`createSourceRegistry()`가 `Partial<Record<Source, JobSource>>`로 묶는다. discover는
+`search.source`로, fetchDetail·recheck는 `job.source`로 구현을 고른다.
+**소스별로 큐를 나누지 마라** — `listJobsNeedingDetail(50)`은 Vercel 함수
+시간 예산의 단위라, 소스로 쪼개면 백로그가 쌓인 쪽이 굶는다.
+
+**Remember는 HTML이 아니라 JSON API다** (`career-api.rememberapp.co.kr`,
+비인증). Blind의 마크업 경고를 여기 복사하지 마라 — 자기네 앱이 쓰는 계약이라
+훨씬 안정적이다.
+
+**Remember는 필터 이름이 틀리면 400이 아니라 그 필터를 무시하고 200을 준다.**
+페이지 URL은 camelCase인데 API 본문은 snake_case다. 실측에서 122건이어야 할
+결과가 12,894건이 됐다. `listRefs`가 응답의
+`meta.logger_info.query_meta_data.search` 에코를 검사해 422로 끊는다 —
+이 검사를 지우면 조건에 맞지 않는 전량이 조용히 수집된다.
+
+마감 표기도 다르다 — Wanted `'close'`, Remember `'closed'`. 그래서
+`parseOpenState`가 자유 함수가 아니라 `JobSource` 메서드다.
+
 ### 목록은 제외 여부로 갈린다
 
 `listDashboardJobs`는 한 번에 한쪽만 준다 — 기본은 제외되지 않은 것, `hiddenOnly`면
@@ -171,6 +192,10 @@ RLS는 8개 테이블 전부 켜져 있고 **정책은 하나도 없다**(servic
 - `apps/web/lib/guard.ts`는 토큰 미설정 시 **500으로 닫는다**. 열어두지 않는다.
 - `docs/profile.md`와 `resume.pdf`는 gitignore 대상(개인 정보). 채점의 실제 원천은
   DB의 `profile.resume_text`이므로, 파일을 고쳤으면 DB에도 다시 로드해야 한다.
+- **교차 중복은 `hidden`이 아니라 `jobs.duplicate_of`로 표시한다.** `hidden`은 이미
+  쓰는 주체가 셋이라(사람·저점수 자동·마감 자동) 네 번째가 끼면 "왜 안 보이는가"를
+  되짚을 수 없다. 판정은 휴리스틱이므로 행을 지우지 않는다 — `/jobs`의 중복 토글로
+  확인하고 되돌릴 수 있어야 한다.
 
 ## 코드 관례
 

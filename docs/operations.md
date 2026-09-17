@@ -42,8 +42,10 @@
 | `0007_jobs_annual.sql` | 적용됨 | 아래 참조 — **하드 블로커** |
 | `0008_hide_low_scores.sql` | 적용됨 | 옛 저점수 공고가 목록에 계속 남는다 |
 | `0009_jobs_rechecked_at.sql` | 적용됨 | 아래 참조 — 수집 cron이 500을 낸다 |
+| `0010_searches_source.sql` | 미적용 | 아래 참조 — 수집 cron이 매번 500을 낸다(모든 검색이 discover에서 실패) |
+| `0011_jobs_duplicate_of.sql` | 미적용 | 아래 참조 — **하드 블로커** |
 
-새 환경(백업 복원, 두 번째 프로젝트)에서는 위 아홉 개를 번호순으로 전부 실행한다.
+새 환경(백업 복원, 두 번째 프로젝트)에서는 위 열한 개를 번호순으로 전부 실행한다.
 "현재 운영 프로젝트" 열은 이 저장소 소유자의 프로젝트 상태일 뿐 코드의 전제가 아니다.
 
 **`0006` 미적용 시**: 카드·상세에 Blind 별점이 안 뜨고, 수집 실행의 `rated`가 0으로
@@ -83,6 +85,34 @@ cron은 한 실행에 40곳씩만 처리한다(운영 187곳이면 닷새).
 조회하려다 PostgREST 404(관계 없음)를 받는다 — `loadUnscoredJobs` 서버 액션이 에러를
 던지고 `UnscoredList`가 에러 배너를 보여준다(메시지가 프로덕션에서 지워지면 digest가
 함께 찍힌다). 채점된 목록 자체는 이 뷰를 쓰지 않으므로 영향 없다.
+
+**`0010` 미적용 시**: `searches.source` 컬럼이 없다. `listEnabledSearches`는 `select('*')`라
+컬럼이 없어도 PostgREST 자체는 400을 내지 않지만, 행에 `source` 필드가 아예 없으니
+런타임 값은 `undefined`다. discover 노드는 `sources[search.source]`로 구현을 찾는데
+`sources[undefined]`는 아무것도 아니므로 **등록된 검색 전부가 매번 `UNKNOWN_SOURCE`로
+실패한다** — 지금 있는 Wanted 검색도 예외가 아니다. discover는 수집 파이프라인의 첫
+단계라, 그 뒤 fetchDetail·recheck에 넘길 신규 공고 자체가 생기지 않는다(기존 백로그의
+상세 조회·재확인은 영향받지 않는다). `runCollect`의 `failed` 배열이 채워지므로
+**수집 cron이 매 실행 500을 낸다.** 화면이 죽거나 데이터가 지워지진 않지만, 이 컬럼
+없이 배포하면 새 공고 발견이 조용히 멈춘 채로 cron만 계속 빨간불이 된다 — 그래서
+0010 마이그레이션 파일의 주석이 코드 배포보다 먼저 적용하라고 못박는다.
+
+**`0011` 미적용 시**: `jobs.duplicate_of` 컬럼이 없다. `listDashboardJobs`와
+`listNotifyPending`이 이 컬럼에 `is null`/`not is null` 필터를 거는데(`/jobs` 페이지가
+이 둘을 한 번에 부른다), PostgREST가 400을 반환해 **`/jobs` 페이지 전체가 죽는다** —
+0004·0007과 같은 등급이다. `listNotifyCandidates`도 같은 필터를 쓰지만 이건 `runNode`로
+감싸이지 않고 `runNotify` 본문에서 직접 호출되므로, 예외가 그대로 라우트까지 튀어
+올라가 **notify cron도 처리되지 않은 예외로 500이 된다.** 랜딩 `/`는 `getDashboardStats`만
+쓰고 `duplicate_of`를 참조하지 않으므로 영향이 없다. **배포 전에 반드시 적용한다.**
+
+**Remember 검색을 새로 등록하려면**: Remember 검색 결과 페이지의 URL을 그대로
+`pnpm backfill --url '<Remember 검색 URL>'`에 넘긴다. `--url`은 API를 부르지 않고 URL의
+필터 JSON을 파싱해 `insert into searches (source, url, params) values (...)` 문 하나를
+표준출력에 찍을 뿐이다(그래서 Supabase 자격 증명 없이도 동작한다). 그 SQL을 SQL
+Editor에서 실행해야 검색이 `enabled=true`로 등록되고, 그 뒤 인자 없이 `pnpm backfill`을
+한 번 더 돌리면 그 검색으로 즉시 수집이 시작된다. **이 등록도 `0010` 적용 이후에만
+뜻이 있다** — `source` 컬럼이 없는 채로 행을 넣어 봐야 discover가 바로 위 문단대로
+`UNKNOWN_SOURCE`로 넘어간다.
 
 ### 3. 발송 설정에 실제 값이 들어갔는지 확인
 
