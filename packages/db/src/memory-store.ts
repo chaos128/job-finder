@@ -3,7 +3,8 @@ import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   CompanyRating, CompanyRatingResult, DashboardRow,
-  Job, JobDetail, JobDetailFields, NewJob, NodeRunEntry, Notification, NotifyPendingRow,
+  Job, JobDetail, JobDetailFields, JobRecheck, NewJob, NodeRunEntry, Notification,
+  NotifyPendingRow,
   Profile, RunPipeline, RunSummary, RunTrigger, Score, ScoreInput, ScoredJob, Search, Source,
   UnscoredJobs,
 } from './types.js'
@@ -30,6 +31,8 @@ export class MemoryStore implements Store {
     rating?: number; blindName?: string; blindUrl?: string
     attempts: number; fetchedAt: string
   }>()
+  /** jobs.rechecked_at 컬럼에 대응. Job 타입에는 노출하지 않는다(조회 순서에만 쓴다). */
+  private readonly recheckedAt = new Map<string, string>()
   readonly runs: RunSummary[] = []
   profile: Profile = {
     resumeText: 'resume',
@@ -95,6 +98,8 @@ export class MemoryStore implements Store {
   async saveJobDetail(jobId: string, fields: JobDetailFields) {
     const job = this.jobs.get(jobId)
     if (!job) throw new Error(`unknown job ${jobId}`)
+    // SupabaseStore와 같은 규약: 상세를 받은 것 자체가 모집 상태를 확인한 것이다.
+    this.recheckedAt.set(jobId, new Date().toISOString())
     this.jobs.set(jobId, { ...job, ...fields, detailStatus: 'ok', detailError: null })
   }
 
@@ -298,6 +303,38 @@ export class MemoryStore implements Store {
       rubricVersions,
       recentRuns: [...this.runs].reverse().slice(0, 5).map((r) => ({ ...r })),
     }
+  }
+
+  async listJobsNeedingRecheck(limit: number, staleDays: number): Promise<Job[]> {
+    const cutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000
+    return [...this.jobs.values()]
+      .filter((j) => !j.hidden && j.detailStatus === 'ok')
+      .filter((j) => {
+        const at = this.recheckedAt.get(j.id)
+        return at === undefined || Date.parse(at) <= cutoff
+      })
+      // 한 번도 확인 안 한 것이 먼저, 그다음 오래된 순(SupabaseStore와 같은 순서).
+      .sort((a, b) => {
+        const ta = this.recheckedAt.get(a.id)
+        const tb = this.recheckedAt.get(b.id)
+        if (ta === tb) return 0
+        if (ta === undefined) return -1
+        if (tb === undefined) return 1
+        return ta < tb ? -1 : 1
+      })
+      .slice(0, limit)
+  }
+
+  async recordJobRecheck(jobId: string, result: JobRecheck) {
+    const job = this.jobs.get(jobId)
+    if (!job) return
+    this.recheckedAt.set(jobId, new Date().toISOString())
+    this.jobs.set(jobId, {
+      ...job,
+      dueTime: result.dueTime,
+      // 닫혔을 때만 켠다. 열려 있다고 끄지 않는다 — 손으로 제외해 둔 공고가 되살아난다.
+      hidden: result.closed ? true : job.hidden,
+    })
   }
 
   async listCompaniesNeedingRating(limit: number, staleDays: number): Promise<string[]> {

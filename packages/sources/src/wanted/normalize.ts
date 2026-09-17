@@ -25,6 +25,10 @@ const detailSchema = z.object({
     // 실패시키지 않도록 optional로 둔다(경력은 부가 정보다).
     annual_from: z.number().nullable().optional(),
     annual_to: z.number().nullable().optional(),
+    // 모집 마감 여부. 목록에서 내려온 due_time과 달리 이 값만이 "닫혔다"를 말해준다 —
+    // 실측에서 마감일이 미래인데 status가 close인 공고가 있었다.
+    status: z.string().nullable().optional(),
+    due_time: z.string().nullable().optional(),
     detail: z.object({
       intro: z.string().nullable().optional(),
       requirements: z.string().nullable().optional(),
@@ -92,5 +96,27 @@ export function normalizeWantedDetail(raw: RawDetail): JobDetailFields {
     benefits: d.benefits ?? null,
     skillTags: (parsed.job.skill_tags ?? []).map((t) => t.title),
     raw: raw.payload,
+  }
+}
+
+/** 재확인 결과. closed면 목록에서 제외하고, dueTime은 화면 표시를 최신으로 맞춘다. */
+export interface JobOpenState {
+  closed: boolean
+  dueTime: string | null
+}
+
+/**
+ * 상세 응답에서 모집 상태만 뽑는다.
+ *
+ * `status === 'close'`일 때만 닫힌 것으로 본다 — 모르는 값이 오면 열린 것으로 둬서
+ * 표기가 바뀌었을 때 멀쩡한 공고를 무더기로 숨기지 않게 한다. 마감일(dueTime)은
+ * 판단에 쓰지 않고 표시용으로만 갱신한다: 저장된 마감이 지났어도 연장되는 경우가
+ * 실제로 있어서(실측 7건 중 1건), 날짜로 판단하면 열려 있는 공고를 숨기게 된다.
+ */
+export function parseJobOpenState(raw: RawDetail): JobOpenState {
+  const parsed = detailSchema.parse(raw.payload)
+  return {
+    closed: parsed.job.status === 'close',
+    dueTime: normalizeDueTime(parsed.job.due_time),
   }
 }

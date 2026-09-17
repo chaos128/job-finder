@@ -2,12 +2,13 @@ import type { RunTrigger, Store } from '@job-finder/db'
 import { findCompanyRating, type JobSource } from '@job-finder/sources'
 import { createCompanyRatingNode, type FindRating } from '../nodes/company-rating.js'
 import { createDiscoverNode } from '../nodes/discover.js'
+import { createRecheckNode } from '../nodes/recheck.js'
 import { createFetchDetailNode } from '../nodes/fetch-detail.js'
 import { runNode, type FailedItem } from '../core/runner.js'
 
-/** failed 배열의 각 항목이 discover/fetchDetail/companyRating 중 어느 단계에서 났는지 태그한다. */
+/** failed 배열의 각 항목이 어느 단계에서 났는지 태그한다. */
 export interface CollectFailedItem extends FailedItem {
-  node: 'discover' | 'fetchDetail' | 'companyRating'
+  node: 'discover' | 'fetchDetail' | 'companyRating' | 'recheck'
 }
 
 export interface CollectReport {
@@ -18,6 +19,8 @@ export interface CollectReport {
   detailed: number
   /** Blind 별점을 새로 확정한 회사 수(미등록으로 확정한 것도 포함). */
   rated: number
+  /** 모집 마감 여부를 다시 확인한 공고 수(닫혀서 제외된 것도 포함). */
+  rechecked: number
   /** true면 상세 조회가 limit을 다 채운 것 — 아직 남은 건이 더 있을 수 있다. */
   hitDetailLimit: boolean
   failed: CollectFailedItem[]
@@ -34,6 +37,15 @@ const DEFAULT_DETAIL_LIMIT = 50
  */
 const DEFAULT_RATING_LIMIT = 40
 
+/**
+ * 한 번의 호출에서 마감 여부를 다시 확인할 공고 수. 건마다 상세 API를 한 번 부른다.
+ * 비제외 공고가 130건 남짓이고 주기가 7일이라, 40건이면 한 바퀴가 나흘쯤 걸린다.
+ */
+const DEFAULT_RECHECK_LIMIT = 40
+
+/** 같은 공고를 다시 확인하기까지의 간격. 모집 상태가 하루 단위로 뒤집히지는 않는다. */
+const RECHECK_STALE_DAYS = 7
+
 /** 별점 조회는 남의 서버를 두드리는 일이라 상세 조회보다 더 얌전하게 굴린다. */
 const RATING_CONCURRENCY = 2
 
@@ -46,7 +58,7 @@ export const RATING_STALE_DAYS = 30
 export async function runCollect(
   deps: { store: Store; source: JobSource; findRating?: FindRating },
   trigger: RunTrigger,
-  opts: { detailLimit?: number; ratingLimit?: number } = {},
+  opts: { detailLimit?: number; ratingLimit?: number; recheckLimit?: number } = {},
 ): Promise<CollectReport> {
   const { store, source } = deps
   const runId = await store.startRun('collect', trigger)
@@ -69,6 +81,18 @@ export async function runCollect(
       { runId, store },
     )
 
+    // 이미 아는 공고가 아직 열려 있는지 다시 본다. 수집과 독립이라 실패해도
+    // 수집 결과를 버리지 않는다.
+    const stale = await store.listJobsNeedingRecheck(
+      opts.recheckLimit ?? DEFAULT_RECHECK_LIMIT, RECHECK_STALE_DAYS,
+    )
+    const rechecked = await runNode(
+      createRecheckNode({ store, source }),
+      stale,
+      (j) => j.id,
+      { runId, store },
+    )
+
     // 별점은 공고 수집과 독립이다 — 실패해도 수집 결과를 버리지 않는다.
     const companies = await store.listCompaniesNeedingRating(
       opts.ratingLimit ?? DEFAULT_RATING_LIMIT, RATING_STALE_DAYS,
@@ -87,11 +111,13 @@ export async function runCollect(
       created: discovered.ok.reduce((sum, r) => sum + r.created, 0),
       detailed: detailed.ok.length,
       rated: rated.ok.length,
+      rechecked: rechecked.ok.length,
       hitDetailLimit: pending.length === detailLimit,
       failed: [
         ...discovered.failed.map((f): CollectFailedItem => ({ ...f, node: 'discover' })),
         ...detailed.failed.map((f): CollectFailedItem => ({ ...f, node: 'fetchDetail' })),
         ...rated.failed.map((f): CollectFailedItem => ({ ...f, node: 'companyRating' })),
+        ...rechecked.failed.map((f): CollectFailedItem => ({ ...f, node: 'recheck' })),
       ],
     }
   } finally {

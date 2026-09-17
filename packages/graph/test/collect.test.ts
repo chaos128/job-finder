@@ -24,7 +24,10 @@ function source(refs: ExternalRef[]): JobSource {
     id: 'wanted',
     parseSearchUrl: () => params,
     async *listRefs() { for (const r of refs) yield r },
-    async fetchDetail(externalId) { return { externalId, payload: {} } },
+    // 재확인 노드가 같은 응답에서 status를 읽으므로 실제 모양을 흉내 낸다.
+    async fetchDetail(externalId) {
+      return { externalId, payload: { job: { id: Number(externalId), status: 'active', detail: {} } } }
+    },
     normalize() {
       return {
         annualFrom: 5, annualTo: 100,
@@ -80,6 +83,7 @@ test('run을 열고 닫으며 node_runs를 남긴다', async () => {
   const report = await runCollect({ store, source: source([ref('1')]), findRating: noRating }, 'manual')
   expect(report.runId).toMatch(/^run_/)
   expect(store.nodeRuns.map((n) => n.node)).toEqual(['discover', 'fetchDetail', 'companyRating'])
+  // 방금 상세를 받은 공고는 재확인 대상이 아니라 recheck는 돌지 않는다.
 })
 
 test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed에 합쳐진다', async () => {

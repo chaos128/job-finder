@@ -493,6 +493,85 @@ export function describeStoreContract(
       expect(total).toBe(3)
     })
 
+    describe('마감 재확인', () => {
+      const withDetail = async (ext: string) => {
+        const [created] = await store.insertJobs([job(ext)])
+        await store.saveJobDetail(created!.id, {
+          annualFrom: 5, annualTo: 100,
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        return created!
+      }
+
+      test('대상은 제외되지 않고 상세를 받은 공고다', async () => {
+        const a = await withDetail('1')
+        const b = await withDetail('2')
+        // 상세 전이라 아직 확인할 게 없다.
+        await store.insertJobs([job('3')])
+        await store.setJobHidden(b.id, true)
+
+        // 방금 상세를 받아 확인 시각이 찍혔으므로 staleDays=0으로 전부 낡게 만든다.
+        const targets = await store.listJobsNeedingRecheck(10, 0)
+        expect(targets.map((j) => j.id)).toEqual([a.id])
+      })
+
+      // 상세를 받는 것 자체가 모집 상태를 확인한 것이다. 이걸 안 남기면 방금 수집한
+      // 공고가 같은 실행의 재확인 노드에 잡혀 같은 API를 한 번 더 부른다.
+      test('방금 상세를 받은 공고는 곧바로 재확인 대상이 되지 않는다', async () => {
+        await withDetail('1')
+        expect(await store.listJobsNeedingRecheck(10, 7)).toEqual([])
+      })
+
+      test('한 번 확인한 공고는 staleDays 전까지 다시 집지 않는다', async () => {
+        const a = await withDetail('1')
+        await store.recordJobRecheck(a.id, { closed: false, dueTime: '2026-12-31' })
+        expect(await store.listJobsNeedingRecheck(10, 7)).toEqual([])
+        // staleDays=0이면 방금 확인한 것도 낡은 것으로 친다 — 시계를 조작하지 않고
+        // 경계를 확인하는 방법이다(회사 별점과 같은 규약).
+        expect((await store.listJobsNeedingRecheck(10, 0)).map((j) => j.id)).toEqual([a.id])
+      })
+
+      test('closed면 제외되고 기본 목록에서 빠진다', async () => {
+        const created = await seedScored(store, [{ ext: '1', total: 80 }])
+        await store.saveJobDetail(created[0]!.id, {
+          annualFrom: 5, annualTo: 100,
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.recordJobRecheck(created[0]!.id, { closed: true, dueTime: '2026-01-01' })
+
+        expect((await store.listDashboardJobs({ limit: 10 })).rows).toEqual([])
+        const onlyHidden = await store.listDashboardJobs({ limit: 10, hiddenOnly: true })
+        expect(onlyHidden.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
+      })
+
+      // 저장된 마감일이 연장되는 경우가 실제로 있다(실측: 09-10 → 09-27).
+      // 갱신하지 않으면 카드가 지난 날짜를 계속 보여준다.
+      test('열려 있으면 마감일만 최신값으로 덮는다', async () => {
+        const created = await seedScored(store, [{ ext: '1', total: 80 }])
+        await store.saveJobDetail(created[0]!.id, {
+          annualFrom: 5, annualTo: 100,
+          intro: null, requirements: null, mainTasks: null,
+          preferredPoints: null, benefits: null, skillTags: [], raw: {},
+        })
+        await store.recordJobRecheck(created[0]!.id, { closed: false, dueTime: '2026-09-27' })
+
+        const page = await store.listDashboardJobs({ limit: 10 })
+        expect(page.rows.map((r) => r.dueTime)).toEqual(['2026-09-27'])
+      })
+
+      // 자동화가 사람의 결정을 덮어쓰면 안 된다 — 손으로 제외해 둔 공고가
+      // 재확인 한 번에 되살아나서는 곤란하다.
+      test('열려 있어도 이미 제외된 공고를 되살리지 않는다', async () => {
+        const created = await seedScored(store, [{ ext: '1', total: 80 }])
+        await store.setJobHidden(created[0]!.id, true)
+        await store.recordJobRecheck(created[0]!.id, { closed: false, dueTime: null })
+
+        expect((await store.listDashboardJobs({ limit: 10 })).rows).toEqual([])
+      })
+    })
+
     describe('회사 별점 (Blind)', () => {
       test('조회 대상은 별점 행이 없는 회사다 — 확정된 회사는 다시 집지 않는다', async () => {
         await store.insertJobs([

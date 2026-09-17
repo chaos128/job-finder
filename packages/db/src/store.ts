@@ -1,6 +1,7 @@
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
-  CompanyRatingResult, Job, JobDetail, JobDetailFields, NewJob, NodeRunEntry, Notification,
+  CompanyRatingResult, Job, JobDetail, JobDetailFields, JobRecheck, NewJob, NodeRunEntry,
+  Notification,
   NotifyPendingRow,
   Profile, RunPipeline, RunTrigger, ScoreInput, ScoredJob, Search, Source, UnscoredJobs,
 } from './types.js'
@@ -64,6 +65,20 @@ export interface Store {
   saveCompanyRating(result: CompanyRatingResult): Promise<void>
   /** 조회 자체가 실패했을 때. attempts를 올리고 다음 실행이 다시 집도록 둔다. */
   recordCompanyRatingFailure(companyName: string, message: string): Promise<void>
+
+  // ── 마감 재확인
+  /**
+   * 모집이 아직 열려 있는지 다시 확인할 공고. 제외되지 않았고 상세를 받은 것 중
+   * 마지막 확인이 staleDays보다 오래된 것을 오래된 순으로 준다(한 번도 확인 안 한
+   * 것이 가장 먼저). 상태 전이가 아니라 질의로 고르므로 몇 번을 다시 돌려도 안전하다.
+   */
+  listJobsNeedingRecheck(limit: number, staleDays: number): Promise<Job[]>
+  /**
+   * 재확인 결과를 반영한다. closed면 제외 처리하고, dueTime은 언제나 최신값으로
+   * 덮는다 — 저장된 마감일이 연장되는 경우가 실제로 있어 그대로 두면 화면이 거짓말한다.
+   * 제외를 풀지는 않는다(자동화가 사람의 결정을 덮어쓰지 않는다는 같은 원칙).
+   */
+  recordJobRecheck(jobId: string, result: JobRecheck): Promise<void>
 
   // ── 관측
   /** pipeline은 대시보드가 collect/notify를 구분하는 유일한 근거다 (node_runs는 빈 실행에서 비어 있다). */

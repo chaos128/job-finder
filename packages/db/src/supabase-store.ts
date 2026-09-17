@@ -3,7 +3,7 @@ import type { Store } from './store.js'
 import type {
   DashboardCursor, DashboardFilters, DashboardPage, DashboardStats,
   Job, JobDetailFields, NewJob, NodeRunEntry, Notification,
-  CompanyRating, CompanyRatingResult, JobDetail,
+  CompanyRating, CompanyRatingResult, JobDetail, JobRecheck,
   NotifyPendingRow, NotifyRule, Profile, RunPipeline, RunTrigger, Score, ScoreInput, ScoredJob, Search,
   SearchParams, Source, UnscoredJobs,
 } from './types.js'
@@ -44,6 +44,7 @@ const DASHBOARD_SELECT =
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
+  rechecked_at?: string | null
   annual_from: number | null; annual_to: number | null
   company_name: string; company_id: number | null
   address_district: string | null; address_full: string | null
@@ -257,6 +258,9 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
 
     async saveJobDetail(jobId: string, fields: JobDetailFields) {
       const { error } = await db.from('jobs').update({
+        // 상세를 받은 것 자체가 모집 상태를 확인한 것이다. 여기서 안 남기면 방금
+        // 수집한 공고가 같은 실행의 재확인 노드에 잡혀 같은 API를 한 번 더 부른다.
+        rechecked_at: new Date().toISOString(),
         annual_from: fields.annualFrom, annual_to: fields.annualTo,
         intro: fields.intro, requirements: fields.requirements,
         main_tasks: fields.mainTasks, preferred_points: fields.preferredPoints,
@@ -543,6 +547,32 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
           startedAt: r.started_at, endedAt: r.ended_at,
         })),
       }
+    },
+
+    async listJobsNeedingRecheck(limit: number, staleDays: number): Promise<Job[]> {
+      // 한 번도 확인 안 한 행(rechecked_at is null)이 먼저 와야 한다. PostgREST의
+      // order는 nullsFirst를 지원하므로 그 한 질의로 끝난다.
+      const cutoff = new Date(Date.now() - staleDays * 24 * 60 * 60 * 1000).toISOString()
+      const rows = unwrap<JobRow[]>(
+        await db.from('jobs').select('*')
+          .eq('hidden', false).eq('detail_status', 'ok')
+          .or(`rechecked_at.is.null,rechecked_at.lte.${cutoff}`)
+          .order('rechecked_at', { ascending: true, nullsFirst: true })
+          .limit(limit),
+      )
+      return rows.map(toJob)
+    },
+
+    async recordJobRecheck(jobId: string, result: JobRecheck) {
+      if (!isUuid(jobId)) return
+      const { error } = await db.from('jobs').update({
+        rechecked_at: new Date().toISOString(),
+        due_time: result.dueTime,
+        // 닫혔을 때만 켠다. 열려 있다고 끄는 문장을 넣으면 손으로 제외해 둔 공고가
+        // 재확인 한 번에 되살아난다.
+        ...(result.closed ? { hidden: true } : {}),
+      }).eq('id', jobId)
+      if (error) throw new Error(error.message)
     },
 
     async listCompaniesNeedingRating(limit: number, staleDays: number): Promise<string[]> {

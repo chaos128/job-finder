@@ -112,6 +112,12 @@ export type CompanyRatingResult =
   | { companyName: string; status: 'ok'; rating: number; blindName: string; blindUrl: string }
   | { companyName: string; status: 'not_found' }
 
+/** 마감 재확인 결과. closed면 제외하고, dueTime은 화면 표시를 최신으로 맞춘다. */
+export interface JobRecheck {
+  closed: boolean
+  dueTime: string | null
+}
+
 /** getJobDetail 전용. ScoredJob에 넣지 않는 이유는 notify 경로가 별점을 쓰지 않기 때문이다. */
 export interface JobDetail extends ScoredJob {
   blind: CompanyRating | null
