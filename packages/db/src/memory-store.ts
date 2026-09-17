@@ -406,6 +406,11 @@ export class MemoryStore implements Store {
   async listDedupIndex(): Promise<DedupCandidate[]> {
     return [...this.jobs.values()]
       .filter((j) => j.duplicateOf === null && !j.hidden)
+      // insertJobs가 이미 (firstSeenAt, id) 순으로 행을 내놓으므로(id가 배치 순서로
+      // 매겨지는 단조 카운터고 Map은 삽입 순서를 유지한다) 이 구현에서는 사실 no-op이다.
+      // 그래도 지우면 안 된다 — SupabaseStore가 `.order()`로 강제하는 것과 같은 정렬
+      // 계약을 이 구현도 명시적으로 선언해 두는 것이고, 계약 테스트는 이 줄이 사라져도
+      // 잡아내지 못한다(두 구현의 자연스러운 순서가 우연히 같기 때문).
       .sort((a, b) => a.firstSeenAt.localeCompare(b.firstSeenAt) || a.id.localeCompare(b.id))
       .map((j) => ({ id: j.id, source: j.source, companyName: j.companyName, position: j.position }))
   }

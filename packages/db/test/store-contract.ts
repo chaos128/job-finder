@@ -345,6 +345,33 @@ export function describeStoreContract(
       expect(page.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
     })
 
+    // duplicatesOnly는 hiddenOnly와 같은 배타 버킷이라 같은 문제가 생긴다 — 여기서는
+    // 손으로 만든 낡은 커서 대신, 비중복 버킷에서 실제로 받은 nextCursor를 그대로
+    // 중복 버킷 질의에 재사용한다. 비중복 버킷의 유일한 행(total 50)보다 두 중복 행
+    // (90, 70)이 더 높은 점수라, duplicates 축 비교가 빠지면 total 커서 필터가 두
+    // 행을 전부 "커서보다 앞선 행"으로 오인해 걸러낸다 — 중복 목록에서 가장 점수
+    // 높은 행이 조용히 사라지는, finding이 지적한 바로 그 증상이다.
+    test('중복 목록은 비중복 목록의 커서를 무시하고 처음부터 준다', async () => {
+      const created = await seedScored(store, [
+        { ext: '1', total: 50 }, { ext: '2', total: 90 }, { ext: '3', total: 70 },
+      ])
+      await store.markDuplicates([
+        { jobId: created[1]!.id, duplicateOf: created[0]!.id },
+        { jobId: created[2]!.id, duplicateOf: created[0]!.id },
+      ])
+
+      // 비중복 버킷의 유일한 행이 꽉 찬 페이지(limit 1)라 nextCursor가 나온다.
+      const firstPage = await store.listDashboardJobs({ limit: 1 })
+      expect(firstPage.rows.map((r) => r.jobId)).toEqual([created[0]!.id])
+      const staleCursor = firstPage.nextCursor!
+
+      const dupPage = await store.listDashboardJobs({
+        limit: 10, duplicatesOnly: true, cursor: staleCursor,
+      })
+      // 스킵되지 않고 처음부터, 점수 내림차순으로 온다.
+      expect(dupPage.rows.map((r) => r.jobId)).toEqual([created[1]!.id, created[2]!.id])
+    })
+
     test('필터는 최소 점수·북마크·미발송을 각각 좁힌다', async () => {
       const created = await seedScored(store, [
         { ext: '1', total: 90 }, { ext: '2', total: 50 },
