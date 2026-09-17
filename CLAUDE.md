@@ -63,6 +63,18 @@ routine 프롬프트: [docs/routine-prompt.md](docs/routine-prompt.md)
 별점은 **채점에 반영하지 않는다.** 루브릭을 건드리면 기존 전량을 재채점해야 하고,
 커버리지가 56%라 없는 회사가 일괄 감점되는 왜곡이 생긴다.
 
+### 50점 이하는 채점 직후 자동으로 제외된다
+
+`/api/scoring/results`가 점수를 저장한 뒤 `total <= AUTO_HIDE_MAX_SCORE`(50)면
+`setJobHidden(jobId, true)`를 부른다. 제외된 공고는 사라지지 않고 목록 맨 뒤로 내려가
+회색으로 표시되므로, 되돌리기 버튼으로 언제든 올릴 수 있다.
+
+**올리기만 하고 내리지 않는다.** 51점 이상이라고 제외를 푸는 분기를 넣으면 손으로
+제외해 둔 공고가 재채점 때 되살아난다 — 자동화가 사람의 결정을 덮어쓰면 안 된다.
+
+숨김 호출은 `saveScore`의 try 밖(자기 catch)에 있어야 한다. 안에 두면 숨김 실패가
+`recordScoreFailure`를 불러 **방금 저장된 멀쩡한 점수를 `status='failed'`로 덮어쓴다.**
+
 ### 경력 요건은 화면 문구가 아니라 정수 두 칸이다
 
 `jobs.annual_from` / `annual_to`(0007)는 Wanted 상세 API가 주는 원본 그대로다.
