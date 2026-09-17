@@ -45,6 +45,13 @@ export interface NewJob {
 }
 
 export interface JobDetailFields {
+  /**
+   * 경력 요건. Wanted 상세 API의 annual_from/annual_to를 그대로 담는다.
+   * annualTo는 100이 "상한 없음"을 뜻하는 센티널이고, annualFrom 0은 신입 포함이다.
+   * 표기 변환은 화면의 몫이다(formatExperience).
+   */
+  annualFrom: number | null
+  annualTo: number | null
   intro: string | null
   requirements: string | null
   mainTasks: string | null
@@ -154,6 +161,9 @@ export interface DashboardRow {
   summary: string
   /** Blind 별점. 미등록이거나 아직 조회 전이면 null. */
   blind: CompanyRating | null
+  /** 경력 요건. 0007 이전에 수집된 행이나 상세 조회 전이면 null. */
+  annualFrom: number | null
+  annualTo: number | null
 }
 
 /**

@@ -40,10 +40,11 @@ const NOTIFY_CANDIDATE_SELECT = `*, jobs(
 // raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning도 뺐다 —
 // 채점 근거 전문은 상세에서만 쓰고, 목록 요약은 채점 시 함께 받은 summary를 그대로 싣는다.
 const DASHBOARD_SELECT =
-  'total, breakdown, notified_at, summary, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden)'
+  'total, breakdown, notified_at, summary, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden, annual_from, annual_to)'
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
+  annual_from: number | null; annual_to: number | null
   company_name: string; company_id: number | null
   address_district: string | null; address_full: string | null
   url: string; due_time: string | null
@@ -79,6 +80,7 @@ type DashboardJoinRow = {
   jobs: {
     id: string; company_name: string; position: string; url: string
     due_time: string | null; bookmarked: boolean; hidden: boolean
+    annual_from: number | null; annual_to: number | null
   }
 }
 
@@ -121,6 +123,8 @@ function toJob(row: DigestJobRow & Partial<Pick<JobRow, DetailColumns>>): Job {
     benefits: row.benefits ?? null,
     skillTags: row.skill_tags ?? [],
     raw: row.raw ?? null,
+    annualFrom: row.annual_from ?? null,
+    annualTo: row.annual_to ?? null,
     firstSeenAt: row.first_seen_at,
     detailStatus: row.detail_status as Job['detailStatus'],
     detailAttempts: row.detail_attempts,
@@ -253,6 +257,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
 
     async saveJobDetail(jobId: string, fields: JobDetailFields) {
       const { error } = await db.from('jobs').update({
+        annual_from: fields.annualFrom, annual_to: fields.annualTo,
         intro: fields.intro, requirements: fields.requirements,
         main_tasks: fields.mainTasks, preferred_points: fields.preferredPoints,
         benefits: fields.benefits, skill_tags: fields.skillTags, raw: fields.raw,
@@ -435,6 +440,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
           url: r.jobs.url, dueTime: r.jobs.due_time, bookmarked: r.jobs.bookmarked, hidden,
           total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
           summary: r.summary,
+          annualFrom: r.jobs.annual_from ?? null, annualTo: r.jobs.annual_to ?? null,
         }))
       }
 

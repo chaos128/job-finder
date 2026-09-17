@@ -3,6 +3,7 @@ import { cn } from '@job-finder/ui'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BlindRating } from '../_components/blind-rating'
+import { formatExperience } from '../_components/experience'
 import { BookmarkToggle } from '../_components/bookmark-toggle'
 import { ScoreBars } from '../_components/score-bars'
 import { scoreBandClass } from '../_components/score-visuals'
@@ -71,8 +72,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             <p className="mt-2 text-sm">{job.skillTags.join(' · ')}</p>
           </section>
         ) : null}
-        <div className="text-sm text-neutral-500">
-          {job.dueTime ? `마감 ${job.dueTime}` : '상시채용'}
+        <div className="flex items-center gap-3 text-sm text-neutral-500">
+          {/* 카드와 같은 순서·같은 규칙으로 둔다. */}
+          {formatExperience(job.annualFrom ?? null, job.annualTo ?? null) && (
+            <span>{formatExperience(job.annualFrom ?? null, job.annualTo ?? null)}</span>
+          )}
+          <span>{job.dueTime ? `마감 ${job.dueTime}` : '상시채용'}</span>
         </div>
       </div>
     </main>

@@ -231,6 +231,7 @@ export class MemoryStore implements Store {
         url: job.url, dueTime: job.dueTime, bookmarked: job.bookmarked, hidden: job.hidden,
         total: score.total, breakdown: score.breakdown, notifiedAt: score.notifiedAt,
         summary: score.summary, blind: this.blindOf(job.companyName),
+        annualFrom: job.annualFrom ?? null, annualTo: job.annualTo ?? null,
       }))
     const last = rows[rows.length - 1]
     return {

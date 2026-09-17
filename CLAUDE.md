@@ -63,6 +63,19 @@ routine 프롬프트: [docs/routine-prompt.md](docs/routine-prompt.md)
 별점은 **채점에 반영하지 않는다.** 루브릭을 건드리면 기존 전량을 재채점해야 하고,
 커버리지가 56%라 없는 회사가 일괄 감점되는 왜곡이 생긴다.
 
+### 경력 요건은 화면 문구가 아니라 정수 두 칸이다
+
+`jobs.annual_from` / `annual_to`(0007)는 Wanted 상세 API가 주는 원본 그대로다.
+화면의 "경력 5년 이상"은 **저장된 값이 아니라 Wanted 프론트엔드가 두 정수로 만들어
+그리는 문구**라, API 응답 어디에도 없다(운영 raw를 뒤져 확인했다 — "경력"이 들어간
+문자열은 전부 JD 본문이다). 그래서 변환은 어차피 필요하고, 렌더 시점에 둔다
+(`apps/web/app/jobs/_components/experience.ts`). 저장해 두면 표기를 고칠 때마다
+전 행을 다시 만들어야 한다.
+
+`annual_to = 100`은 **"상한 없음" 센티널**이고 `annual_from = 0`은 신입 포함이다.
+그대로 쓰면 "경력 5-100년"이 나간다. 표기 규칙 일곱 가지는 실제 공고 페이지와
+대조해 `apps/web/test/experience.test.ts`에 박아뒀다.
+
 ### 노드는 절대 throw하지 않는다
 
 `packages/graph/src/core/node.ts`의 `Node<In,Out>`는 `NodeResult`를 반환한다

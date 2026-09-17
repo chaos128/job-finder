@@ -23,6 +23,7 @@ async function seedScored(store: MemoryStore, totals: number[], offset = 0) {
       url: `https://www.wanted.co.kr/wd/${i}`, dueTime: null,
     }])
     await store.saveJobDetail(job!.id, {
+      annualFrom: 5, annualTo: 100,
       intro: null, requirements: null, mainTasks: null,
       preferredPoints: null, benefits: null, skillTags: [], raw: {},
     })

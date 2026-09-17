@@ -5,6 +5,7 @@ import type { DashboardRow } from "@job-finder/db";
 import { Bookmark, RotateCcw, X, } from "lucide-react";
 import Link from "next/link";
 import { BlindRating } from "./blind-rating";
+import { formatExperience } from "./experience";
 import { markDetailNavigation } from "./list-cache";
 import { AXIS_BAR_COLOR, scoreBandClass } from "./score-visuals";
 
@@ -19,6 +20,7 @@ export function JobCard({
   onToggleBookmark: (jobId: string, next: boolean) => void;
   onToggleHidden: (jobId: string, next: boolean) => void;
 }) {
+  const experience = formatExperience(row.annualFrom, row.annualTo);
   return (
     <div
       className={cn(
@@ -95,6 +97,9 @@ export function JobCard({
           ))}
         </div>
         <div className="flex items-center gap-2 text-xs text-neutral-400">
+          {/* 경력 요건은 role 축 판단의 핵심 재료라 마감과 같은 줄에 먼저 둔다.
+              값이 없는 행(0007 적용 전 수집분)은 아무것도 그리지 않는다. */}
+          {experience && <span className="text-neutral-500">{experience}</span>}
           <span>{row.dueTime ? `마감 ${row.dueTime}` : "상시채용"}</span>
           {row.notifiedAt && <Badge>발송됨</Badge>}
         </div>

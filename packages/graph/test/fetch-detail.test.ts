@@ -21,6 +21,7 @@ function source(overrides: Partial<JobSource> = {}): JobSource {
     async fetchDetail(externalId) { return { externalId, payload: { ok: true } } },
     normalize() {
       return {
+        annualFrom: 5, annualTo: 100,
         intro: '소개', requirements: 'React 8년',
         mainTasks: '개발', preferredPoints: 'TS', benefits: '복지',
         skillTags: ['React', 'TypeScript'], raw: { ok: true },

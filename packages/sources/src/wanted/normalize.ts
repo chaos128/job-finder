@@ -21,6 +21,10 @@ const listPageSchema = z.object({
 const detailSchema = z.object({
   job: z.object({
     id: z.number(),
+    // 화면의 "경력 5년 이상"에 해당한다. 없는 응답이 있어도 상세 저장 전체를
+    // 실패시키지 않도록 optional로 둔다(경력은 부가 정보다).
+    annual_from: z.number().nullable().optional(),
+    annual_to: z.number().nullable().optional(),
     detail: z.object({
       intro: z.string().nullable().optional(),
       requirements: z.string().nullable().optional(),
@@ -79,6 +83,8 @@ export function normalizeWantedDetail(raw: RawDetail): JobDetailFields {
   const parsed = detailSchema.parse(raw.payload)
   const d = parsed.job.detail
   return {
+    annualFrom: parsed.job.annual_from ?? null,
+    annualTo: parsed.job.annual_to ?? null,
     intro: d.intro ?? null,
     requirements: d.requirements ?? null,
     mainTasks: d.main_tasks ?? null,

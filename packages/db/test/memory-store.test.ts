@@ -30,7 +30,8 @@ test('알림 후보는 상위 200건까지만 돌려준다', async () => {
   )
   for (const [i, row] of rows.entries()) {
     await store.saveJobDetail(row.id, {
-      intro: null, requirements: null, mainTasks: null,
+      annualFrom: 5, annualTo: 100,
+        intro: null, requirements: null, mainTasks: null,
       preferredPoints: null, benefits: null, skillTags: [], raw: {},
     })
     await store.saveScore({

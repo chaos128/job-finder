@@ -27,6 +27,7 @@ function source(refs: ExternalRef[]): JobSource {
     async fetchDetail(externalId) { return { externalId, payload: {} } },
     normalize() {
       return {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: 'React', mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       }
@@ -103,6 +104,7 @@ test('검색 실패와 상세 실패가 각각 origin이 태그된 채로 failed
     },
     normalize() {
       return {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: 'React', mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       }

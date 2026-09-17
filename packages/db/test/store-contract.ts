@@ -59,6 +59,7 @@ export function describeStoreContract(
     test('detail 저장 후에는 대기 목록에서 빠지고 채점 대기로 넘어간다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: 'React', mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       })
@@ -79,6 +80,7 @@ export function describeStoreContract(
     test('상세가 저장된 뒤 도착한 실패는 job을 다시 대기 상태로 되돌리지 못한다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: 'React', mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: ['React'], raw: {},
       })
@@ -90,6 +92,7 @@ export function describeStoreContract(
     test('채점된 job은 채점 대기에서 빠지고 알림 후보가 된다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: null, mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: [], raw: {},
       })
@@ -107,6 +110,7 @@ export function describeStoreContract(
       const inserted = await store.insertJobs([job('1'), job('2'), job('3')])
       for (const [i, total] of [70, 90, 80].entries()) {
         await store.saveJobDetail(inserted[i]!.id, {
+          annualFrom: 5, annualTo: 100,
           intro: null, requirements: null, mainTasks: null,
           preferredPoints: null, benefits: null, skillTags: [], raw: {},
         })
@@ -128,6 +132,7 @@ export function describeStoreContract(
       ])
       for (const [i, total] of [70, 90, 80].entries()) {
         await store.saveJobDetail(inserted[i]!.id, {
+          annualFrom: 5, annualTo: 100,
           intro: null, requirements: null, mainTasks: null,
           preferredPoints: null, benefits: null, skillTags: [], raw: {},
         })
@@ -150,6 +155,7 @@ export function describeStoreContract(
     test('발송 표시된 job은 알림 후보에서 빠진다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: null, mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: [], raw: {},
       })
@@ -184,6 +190,7 @@ export function describeStoreContract(
     test('재채점해도 이미 발송된 job의 notifiedAt은 보존된다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: null, mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: [], raw: {},
       })
@@ -203,6 +210,7 @@ export function describeStoreContract(
     test('채점 실패 후 3회 미만이면 채점 대기로 돌아오고, 3회 실패하면 영구히 빠진다', async () => {
       const [inserted] = await store.insertJobs([job('1')])
       await store.saveJobDetail(inserted!.id, {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: null, mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: [], raw: {},
       })
@@ -499,6 +507,7 @@ export function describeStoreContract(
       test('별점은 목록과 상세 양쪽에 같은 값으로 실린다', async () => {
         const [created] = await store.insertJobs([{ ...job('1'), companyName: 'ACME' }])
         await store.saveJobDetail(created!.id, {
+          annualFrom: 5, annualTo: 100,
           intro: null, requirements: null, mainTasks: null,
           preferredPoints: null, benefits: null, skillTags: [], raw: {},
         })
@@ -524,6 +533,7 @@ export function describeStoreContract(
       test('미등록 회사의 별점은 null이다', async () => {
         const [created] = await store.insertJobs([{ ...job('1'), companyName: '없는회사' }])
         await store.saveJobDetail(created!.id, {
+          annualFrom: 5, annualTo: 100,
           intro: null, requirements: null, mainTasks: null,
           preferredPoints: null, benefits: null, skillTags: [], raw: {},
         })

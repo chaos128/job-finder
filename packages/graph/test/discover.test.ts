@@ -40,6 +40,7 @@ function fakeSource(refs: ExternalRef[], onList?: () => never): JobSource {
     async fetchDetail(externalId) { return { externalId, payload: {} } },
     normalize() {
       return {
+        annualFrom: 5, annualTo: 100,
         intro: null, requirements: null, mainTasks: null,
         preferredPoints: null, benefits: null, skillTags: [], raw: {},
       }
