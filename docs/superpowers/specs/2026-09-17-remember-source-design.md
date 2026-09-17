@@ -400,11 +400,23 @@ Remember 122건이 들어오면 코퍼스가 대략 두 배가 된다. 현재 �
 수동 적용이다(러너 없음). Supabase 대시보드 SQL Editor에서 사람이 실행한다.
 
 - `0010_searches_source.sql` — `searches.source text not null default 'wanted'`
+- `0012_searches_params_source.sql` — 기존 검색 행의 params에 source 판별자를 채워 넣는다
 - `0011_jobs_duplicate_of.sql` — `duplicate_of` 컬럼 + 인덱스, `jobs_needing_score` 뷰 재생성
 
-번호가 구현 순서와 같다. `searches.source`가 먼저 있어야 소스 레지스트리 배선이 성립한다.
+적용 순서는 `0010 → 0012 → 0011 → 배포`다. 번호와 적용 순서가 다른 유일한 지점이다 —
+0012는 0011보다 나중에 만들어졌지만 0010이 남긴 간극(아래)을 메우는 것이라 0010 바로
+뒤, 배포보다는 반드시 먼저 적용해야 한다.
 
-기존 `searches` 행은 default로 `'wanted'`가 되므로 적용 전후 동작이 같다.
+`searches.source`가 먼저 있어야 소스 레지스트리 배선이 성립한다.
+
+`searches.source` 컬럼은 default `'wanted'`라 기존 행에도 채워지지만, discover의
+SOURCE_MISMATCH 가드는 컬럼이 아니라 params 안의 source 판별자를 본다. 이 브랜치
+이전에 저장된 Wanted 검색 행의 params에는 그 키가 없으므로(pre-branch
+parseWantedSearchUrl은 source를 넣지 않았다), 0010만 적용하고 배포하면 기존 Wanted
+검색 전부가 매 실행 SOURCE_MISMATCH로 영구히 실패한다 — "적용 전후 동작이 같다"는
+말은 틀렸다. `0012_searches_params_source.sql`이 컬럼값을 params 안으로 복사해
+이 간극을 메운다.
+
 `duplicate_of`는 적용 전에는 컬럼이 없어 코드가 죽는다 — **코드 배포 전에 적용해야 한다.**
 
 Remember 검색 행은 마이그레이션이 아니라 대시보드에서 URL을 등록해 만든다.

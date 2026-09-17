@@ -90,7 +90,16 @@ export interface Store {
    * 행을 후보로 두면 재등록분이 그 옛 행의 중복으로 찍혀 영원히 채점되지 않는다.
    */
   listDedupIndex(): Promise<DedupCandidate[]>
-  /** 새로 만든 행을 기존 행의 중복으로 표시한다. */
+  /**
+   * 새로 만든 행을 기존 행의 중복으로 표시한다.
+   *
+   * discover가 insertJobs 직후 그 배치에 대해서만 한 번 호출한다 — 이 파이프라인의
+   * 다른 단계와 달리 "질의로 대상을 고른다" 원칙을 따르지 않고 실행 시점에 계산해
+   * 소비하는 값이다. insertJobs는 성공했는데 이 호출이 실패하거나(그 사이 Vercel
+   * 함수가 60초 상한에 걸리는 경우 포함) discover 자체가 중간에 죽으면, 그 행들은
+   * 다음 실행에서 이미 `created`가 아니므로 다시 판정 대상이 되지 않는다 — 중복
+   * 표시가 영구히 누락된 채 남는다(공고 자체는 정상 저장·채점된다).
+   */
   markDuplicates(pairs: Array<{ jobId: string; duplicateOf: string }>): Promise<void>
 
   // ── 관측

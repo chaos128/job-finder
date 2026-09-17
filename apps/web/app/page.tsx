@@ -5,7 +5,7 @@ import { StatusStrip } from './_components/status-strip'
 export const dynamic = 'force-dynamic'
 
 const STEPS = [
-  { when: 'KST 01:00', title: '수집', body: '등록된 검색 조건으로 Wanted를 훑어 새로 올라온 공고만 저장한다. 이미 아는 공고는 건너뛴다.' },
+  { when: 'KST 01:00', title: '수집', body: '등록된 검색 조건으로 Wanted·Remember를 훑어 새로 올라온 공고만 저장한다. 이미 아는 공고는 건너뛴다.' },
   { when: 'KST 03:00', title: '채점', body: '이력서 프로필과 대조해 5개 축으로 0~100점을 매긴다. 채점은 이 앱이 아니라 외부 Claude Code routine이 한다.' },
   { when: 'KST 09:00', title: '알림', body: '기준을 넘긴 공고를 점수 순으로 골라 다이제스트 메일 한 통으로 보낸다.' },
 ]
@@ -26,7 +26,7 @@ export default async function Page() {
       <header className="space-y-6">
         <h1 className="text-5xl font-bold tracking-tight">Job Finder</h1>
         <p className="text-xl leading-relaxed text-neutral-600">
-          Wanted 채용 공고를 매일 훑어 이력서와 대조 채점하고,
+          Wanted·Remember 채용 공고를 매일 훑어 이력서와 대조 채점하고,
           <br />
           좋은 매치가 나오면 아침에 메일 한 통으로 알려준다.
         </p>

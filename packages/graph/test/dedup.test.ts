@@ -64,6 +64,18 @@ test('짧은 직무명은 중복으로 보지 않는다', () => {
   expect(findDuplicate(c('b', 'remember', '토스', '프론트엔드 개발자'), index)).toBeNull()
 })
 
+// 같은 소스끼리는 포함 관계만으로 중복 처리하지 않는다 — 이 기능은 교차 중복
+// 전용이다(같은 소스 재등록은 새 external_id로 들어오고, 재확인이 옛 행을 hidden
+// 처리해 인덱스에서 빠진다). 이 가드가 없으면 'Frontend Engineer'와
+// 'Frontend Engineer (MLOps, Vision AI Platform)'처럼 같은 회사의 서로 다른 공고가
+// 뭉친다 — normalizePosition은 대괄호만 벗기고 괄호는 남기므로 포함 관계가 성립한다.
+test('같은 소스끼리는 직무가 포함 관계여도 중복으로 보지 않는다', () => {
+  const index = [c('a', 'wanted', '루닛', 'Frontend Engineer')]
+  expect(findDuplicate(
+    c('b', 'wanted', '루닛', 'Frontend Engineer (MLOps, Vision AI Platform)'), index,
+  )).toBeNull()
+})
+
 test('회사가 다르면 직무가 같아도 중복이 아니다', () => {
   const index = [c('a', 'wanted', '루닛', 'Senior Full Stack Engineer')]
   expect(findDuplicate(c('b', 'remember', '토스', 'Senior Full Stack Engineer'), index)).toBeNull()

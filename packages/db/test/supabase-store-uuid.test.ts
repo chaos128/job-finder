@@ -113,6 +113,44 @@ describe('SupabaseStore.listDashboardJobs의 hidden 필터', () => {
   })
 })
 
+// 다른 배타 버킷(hidden)과 같은 이유로 실제 쿼리 문자열을 고정해 둔다 — 계약
+// 테스트는 MemoryStore만 돌아 PostgREST 술어 자체(is.null vs not.is.null)는 못 잡는다.
+describe('SupabaseStore.listDashboardJobs의 duplicate_of 배타 버킷', () => {
+  test('기본은 jobs.duplicate_of=is.null로 묻는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listDashboardJobs({ limit: 10 })
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.duplicate_of=is.null')
+  })
+
+  test('duplicatesOnly면 jobs.duplicate_of=not.is.null로 묻는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listDashboardJobs({ limit: 10, duplicatesOnly: true })
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.duplicate_of=not.is.null')
+  })
+})
+
+describe('SupabaseStore.listDedupIndex', () => {
+  // listDedupIndex의 세 계약(중복 아님, 제외 안 됨, first_seen_at·id 오름차순)은
+  // findDuplicate가 "먼저 수집된 쪽을 원본으로 삼는다"를 지키는 전제다 — 하나라도
+  // 빠지면 원본 판정이 실행 순서에 흔들린다.
+  test('duplicate_of가 null이고 hidden이 아닌 것만 first_seen_at,id 오름차순으로 묻는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listDedupIndex()
+    const url = decodeURIComponent(urls[0]!)
+    expect(url).toContain('duplicate_of=is.null')
+    expect(url).toContain('hidden=eq.false')
+    expect(url).toContain('order=first_seen_at.asc,id.asc')
+  })
+})
+
+describe('SupabaseStore.listNotifyPending', () => {
+  test('jobs.duplicate_of=is.null 필터를 싣는다', async () => {
+    const urls = captureRequestUrls()
+    await store.listNotifyPending()
+    expect(decodeURIComponent(urls[0]!)).toContain('jobs.duplicate_of=is.null')
+  })
+})
+
 describe('SupabaseStore.listUnscoredJobs', () => {
   test('first_seen_at 동률을 id로 갈라 상한이 달라도 같은 앞부분을 준다', async () => {
     const urls = captureRequestUrls()

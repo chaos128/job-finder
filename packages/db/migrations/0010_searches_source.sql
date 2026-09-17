@@ -4,6 +4,9 @@
 -- params의 모양만 보고도 알 수 있었지만, Remember가 붙으면 params가 소스마다
 -- 다른 모양이 되므로 무엇으로 파싱할지를 행이 직접 말해야 한다.
 --
--- default 'wanted'라 이미 있는 행은 적용 전후 동작이 같다. 코드가 이 컬럼을
--- 읽기 시작하므로 **코드 배포보다 먼저 적용해야 한다.**
+-- default 'wanted'라 컬럼 자체는 기존 행에도 채워진다. 하지만 discover의
+-- SOURCE_MISMATCH 가드는 이 컬럼이 아니라 params 안의 source 판별자를 보는데,
+-- 이 브랜치 이전에 저장된 Wanted 검색 행의 params에는 그 키가 없다 — "적용 전후
+-- 동작이 같다"는 말은 틀렸다. `0012_searches_params_source.sql`이 그 간극을 메운다.
+-- 코드가 이 컬럼을 읽기 시작하므로 0012와 함께 **코드 배포보다 먼저 적용해야 한다.**
 alter table searches add column if not exists source text not null default 'wanted';

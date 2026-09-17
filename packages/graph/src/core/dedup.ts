@@ -76,6 +76,15 @@ export function findDuplicate(
 
   for (const existing of index) {
     if (existing.id === candidate.id) continue
+    // 이 기능은 설계상 교차 중복(다른 소스에서 같은 공고가 또 올라오는 경우)만
+    // 잡는다. 같은 소스에서 재등록되면 소스가 새 external_id를 주고(listDedupIndex
+    // 주석 참고) 재확인이 옛 행을 hidden 처리해 인덱스에서 빠지므로, 같은 소스끼리
+    // 비교해 얻는 탐지 이득은 거의 없다. 반대로 같은 소스·같은 회사의 서로 다른
+    // 공고(예: 'Frontend Engineer'와 'Frontend Engineer (MLOps, Vision AI Platform)')는
+    // normalizePosition이 대괄호만 벗기고 괄호는 남기지 않아 포함 관계로 오판정될
+    // 수 있다 — 되돌릴 방법이 없는 오탐이라(undo 경로 없음) 이 한 줄로 그 부류를
+    // 통째로 제거하는 편이 낫다.
+    if (existing.source === candidate.source) continue
     if (normalizeCompany(existing.companyName) !== company) continue
     const other = normalizePosition(existing.position)
     if (other.length < MIN_POSITION_LENGTH) continue

@@ -43,10 +43,14 @@
 | `0008_hide_low_scores.sql` | 적용됨 | 옛 저점수 공고가 목록에 계속 남는다 |
 | `0009_jobs_rechecked_at.sql` | 적용됨 | 아래 참조 — 수집 cron이 500을 낸다 |
 | `0010_searches_source.sql` | 미적용 | 아래 참조 — 수집 cron이 매번 500을 낸다(모든 검색이 discover에서 실패) |
+| `0012_searches_params_source.sql` | 미적용 | 아래 참조 — 0010만 적용하고 배포하면 기존 Wanted 검색이 discover에서 영구 실패한다 |
 | `0011_jobs_duplicate_of.sql` | 미적용 | 아래 참조 — **하드 블로커** |
 
-새 환경(백업 복원, 두 번째 프로젝트)에서는 위 열한 개를 번호순으로 전부 실행한다.
-"현재 운영 프로젝트" 열은 이 저장소 소유자의 프로젝트 상태일 뿐 코드의 전제가 아니다.
+새 환경(백업 복원, 두 번째 프로젝트)에서는 아래 열두 개를 실행한다. 단 **0010 → 0012 →
+0011 → 배포** 순서를 지켜야 한다 — 파일 번호 순서(0010 → 0011 → 0012)와 다르다. 0012는
+0010이 남긴 간극을 메우는 것이라 0011보다 먼저, 그리고 반드시 배포보다 먼저 적용해야
+한다(각 단계를 건너뛰면 무엇이 깨지는지는 아래 0010·0012·0011 항목 참조). "현재 운영
+프로젝트" 열은 이 저장소 소유자의 프로젝트 상태일 뿐 코드의 전제가 아니다.
 
 **`0006` 미적용 시**: 카드·상세에 Blind 별점이 안 뜨고, 수집 실행의 `rated`가 0으로
 남는다. 그뿐이다 — `fetchRatings`는 표가 없으면 던지지 않고 빈 결과로 넘어간다.
@@ -97,6 +101,20 @@ cron은 한 실행에 40곳씩만 처리한다(운영 187곳이면 닷새).
 없이 배포하면 새 공고 발견이 조용히 멈춘 채로 cron만 계속 빨간불이 된다 — 그래서
 0010 마이그레이션 파일의 주석이 코드 배포보다 먼저 적용하라고 못박는다.
 
+**`0010`만 적용하고 `0012`를 건너뛰면**: 컬럼은 생기지만 위 실패가 그대로 재현된다.
+`source` 컬럼은 default `'wanted'`라 채워져도, discover의 SOURCE_MISMATCH 가드는
+컬럼이 아니라 params 안의 source 판별자를 본다. 이 브랜치 이전에 저장된 Wanted 검색
+행의 params에는 그 키가 없으므로(pre-branch `parseWantedSearchUrl`은 source를 넣지
+않았다) `search.params?.source !== search.source`가 항상 참이 되어 **기존 Wanted
+검색 전부가 매 실행 SOURCE_MISMATCH(`retryable: false`)로 영구히 실패한다** — 0010
+미적용 시와 증상은 같지만(신규 공고 발견 정지, cron 500) 원인과 해법이 다르다. 새로
+등록하는 Remember/Wanted 검색은 코드가 params에 source를 직접 채우므로 영향받지
+않는다.
+
+**`0012` 미적용 시**: 위와 같다. `0012_searches_params_source.sql`은 params에 source
+키가 없는 기존 행에 한해 컬럼값을 params 안으로 복사한다 — 적용하면 그 행들도
+정상적으로 discover를 통과한다.
+
 **`0011` 미적용 시**: `jobs.duplicate_of` 컬럼이 없다. `listDashboardJobs`와
 `listNotifyPending`이 이 컬럼에 `is null`/`not is null` 필터를 거는데(`/jobs` 페이지가
 이 둘을 한 번에 부른다), PostgREST가 400을 반환해 **`/jobs` 페이지 전체가 죽는다** —
@@ -113,6 +131,16 @@ Editor에서 실행해야 검색이 `enabled=true`로 등록되고, 그 뒤 인�
 한 번 더 돌리면 그 검색으로 즉시 수집이 시작된다. **이 등록도 `0010` 적용 이후에만
 뜻이 있다** — `source` 컬럼이 없는 채로 행을 넣어 봐야 discover가 바로 위 문단대로
 `UNKNOWN_SOURCE`로 넘어간다.
+
+**중복 오탐을 되돌리려면**: `/jobs`의 중복 토글은 `duplicate_of`가 채워진 행을 보여줄
+뿐이고, 지우는 기능은 Store·서버 액션·UI 어디에도 없다(의도적으로 만들지 않았다 —
+CLAUDE.md 참고). 잘못 짝지어진 행을 발견하면(예: 같은 회사의 서로 다른 공고가 중복으로
+찍힌 경우) `/jobs`에서 그 행의 id를 확인해 마이그레이션과 같은 방식으로, 사람이 SQL
+Editor에서 직접 지운다:
+
+```sql
+update jobs set duplicate_of = null where id = '<잘못 짝지어진 job의 id>';
+```
 
 ### 3. 발송 설정에 실제 값이 들어갔는지 확인
 
