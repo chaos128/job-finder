@@ -6,6 +6,11 @@ export { normalizeWantedDetail, parseJobOpenState, parseListPage } from './wante
 export { WantedHttpError, absolute, getJson } from './wanted/client.js'
 export { createWantedSource } from './wanted/index.js'
 export { BlindHttpError, findCompanyRating, parseSearchPage, searchCandidates, type BlindCompany } from './blind/index.js'
+export {
+  REMEMBER_API_BASE, REMEMBER_JOB_URL_BASE,
+  buildRememberSearchBody, parseRememberSearchUrl,
+} from './remember/parse-url.js'
+export { RememberHttpError, getRememberJson, postJson } from './remember/client.js'
 
 import type { SourceRegistry } from './types.js'
 import { createWantedSource } from './wanted/index.js'
