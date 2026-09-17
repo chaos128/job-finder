@@ -27,8 +27,15 @@ function mergeRows(prev: DashboardRow[], next: DashboardRow[]): DashboardRow[] {
   return [...prev, ...next.filter((r) => !seen.has(r.jobId))].sort(compareDashboardOrder)
 }
 
-export function JobList({ initialRows, initialCursor }: {
+/**
+ * 검색어를 필터에 반영하기까지 기다리는 시간. 필터가 바뀌면 서버에서 처음부터 다시
+ * 받으므로(아래 effect), 한 글자마다 걸면 "프론트엔드" 한 단어에 왕복이 여섯 번 난다.
+ */
+const SEARCH_DEBOUNCE_MS = 300
+
+export function JobList({ initialRows, initialCursor, initialTotal }: {
   initialRows: DashboardRow[]; initialCursor: DashboardCursor | null
+  initialTotal: number | null
 }) {
   // 상세에 다녀온 것이면 떠날 때 담아둔 목록을 그대로 되살린다. 첫 렌더에 이미
   // 전량이 들어 있어야 문서 높이가 유지되고, 그래야 브라우저의 스크롤 복원이
@@ -37,6 +44,11 @@ export function JobList({ initialRows, initialCursor }: {
   const [filters, setFilters] = useState<DashboardFilters>(() => restored?.filters ?? {})
   const [rows, setRows] = useState(() => restored?.rows ?? initialRows)
   const [cursor, setCursor] = useState(() => restored?.cursor ?? initialCursor)
+  // 무한 스크롤이라 rows.length는 "지금까지 불러온 만큼"일 뿐이다. 필터에 걸린
+  // 전체 건수는 서버만 알고, 커서 페이지 응답에서는 null로 오므로 따로 들고 있는다.
+  const [total, setTotal] = useState(() => restored?.total ?? initialTotal)
+  // 입력칸은 즉시 반응해야 하고 질의는 디바운스돼야 해서 상태를 둘로 나눈다.
+  const [searchInput, setSearchInput] = useState(() => restored?.searchInput ?? '')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const sentinel = useRef<HTMLDivElement>(null)
@@ -57,11 +69,22 @@ export function JobList({ initialRows, initialCursor }: {
 
   // 언마운트 시점에 최신 값을 담아야 하는데, effect의 cleanup은 그 effect가
   // 만들어질 때의 값을 붙든다. ref로 최신값을 따라가게 해 둔다.
-  const snapshot = useRef({ rows, cursor, filters })
-  snapshot.current = { rows, cursor, filters }
+  const snapshot = useRef({ rows, cursor, filters, total, searchInput })
+  snapshot.current = { rows, cursor, filters, total, searchInput }
 
   // 상세로 떠날 때만 실제로 담긴다(markDetailNavigation 참고).
   useEffect(() => () => saveListCache(snapshot.current), [])
+
+  // 타이핑이 멎은 뒤에야 필터로 넘긴다. filters가 바뀌면 아래 effect가 전량을 다시
+  // 받으므로, 디바운스 없이 이으면 글자마다 목록이 비워졌다 채워진다.
+  // 값이 같으면 setFilters를 부르지 않는다 — 같은 객체라도 새로 만들면 아래 effect가
+  // 의존성 변화로 보고 재조회한다(되살린 목록이 첫 렌더에 날아간다).
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setFilters((f) => (f.search ?? '') === searchInput ? f : { ...f, search: searchInput })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [searchInput])
 
   // 필터가 바뀌면 서버에서 처음부터 다시 받는다 — 커서 페이징이라 클라이언트에서 좁힐 수 없다.
   useEffect(() => {
@@ -72,12 +95,12 @@ export function JobList({ initialRows, initialCursor }: {
     // 실패하면 cursor가 이전 필터 결과의 마지막 행을 가리킨 채 남는다 — 그 뒤의
     // 스크롤은 같은 세대라 가드를 통과하고, 새 필터로 낡은 커서를 태워 두 질의의
     // 결과를 한 목록에 이어붙인다(새로고침 전까지 자가 교정되지 않는다).
-    setRows([]); setCursor(null)
+    setRows([]); setCursor(null); setTotal(null)
     startTransition(async () => {
       try {
         const page = await loadMoreJobs(filters)
         if (myGeneration === generation.current) {
-          setRows(page.rows); setCursor(page.nextCursor); setError(null)
+          setRows(page.rows); setCursor(page.nextCursor); setTotal(page.total); setError(null)
         }
       } catch (e) {
         if (myGeneration === generation.current) setError(e instanceof Error ? e.message : String(e))
@@ -102,6 +125,18 @@ export function JobList({ initialRows, initialCursor }: {
           if (myGeneration === generation.current) setError(e instanceof Error ? e.message : String(e))
         }
       })
+    }, {
+      // 바닥에 닿은 뒤에 부르면 "불러오는 중…"을 매번 마주친다. 뷰포트를 아래로
+      // 1200px 늘린 것처럼 취급해, 센티넬이 아직 안 보일 때 미리 당겨온다.
+      //
+      // 1200인 이유: 카드가 ~250px라 다섯 장 앞서 발동하고, 빠른 스크롤(초당
+      // 2000~3000px)에서 0.4~0.6초의 여유가 된다 — /jobs 첫 응답이 356ms였으니
+      // 한 페이지 fetch가 그 안에 들어온다.
+      //
+      // 한 페이지(20장 ≈ 5000px)보다 작게 잡는 것이 중요하다. 이 값이 페이지
+      // 높이를 넘으면 한 번 받은 직후에도 센티넬이 사거리 안에 남아 다음 페이지를
+      // 연달아 부르고, 스크롤하지 않은 사용자에게 목록 전체가 로드된다.
+      rootMargin: '1200px 0px',
     })
     io.observe(el)
     return () => io.disconnect()
@@ -139,6 +174,20 @@ export function JobList({ initialRows, initialCursor }: {
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        {/* 회사명·포지션 부분 일치. 다른 필터와 같은 이유로 미채점만일 때는 막는다.
+            서버에서 거른다 — 커서 페이징이라 화면에 올라온 행은 전체의 일부일 뿐이고,
+            여기서 좁히면 남은 페이지를 어디서 이어야 할지 알 수 없다. */}
+        <Input
+          type="search"
+          disabled={unscoredOnly}
+          placeholder="회사·포지션 검색"
+          aria-label="회사명 또는 포지션 검색"
+          className={cn(
+            'h-9 w-56 rounded-full px-4 disabled:cursor-not-allowed disabled:opacity-40',
+          )}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
         {/* 최소 점수·북마크·미발송은 전부 점수가 있어야 뜻이 생기는 조건이라, 미채점만
             볼 때는 못 누르게 막는다. 숨기지는 않는다 — 토글할 때마다 줄 폭이 통째로
             바뀌어 아래 목록이 밀린다(CLS). 자리를 지키면서 비활성만 알린다. */}
@@ -231,7 +280,13 @@ export function JobList({ initialRows, initialCursor }: {
         >
           미채점만
         </button>
-        {!unscoredOnly && <Badge className="ml-auto">{rows.length}건</Badge>}
+        {/* 서버가 센 전체 건수다. rows.length는 무한 스크롤로 지금까지 불러온 만큼일
+            뿐이라, 그 값을 "건수"로 보여주면 스크롤할 때마다 총량이 늘어나는 것처럼
+            보인다. 아직 못 받았으면(첫 조회 중) 숫자 자리를 비워 둔다 — 0건으로
+            채우면 "결과 없음"으로 잘못 읽힌다. */}
+        {!unscoredOnly && (
+          <Badge className="ml-auto">{total === null ? '…' : `${total}건`}</Badge>
+        )}
       </div>
 
       {/* 에러 배너·목록·센티넬은 전부 점수 목록에 속한다. 미채점만 볼 때 같이 띄우면
