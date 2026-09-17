@@ -7,6 +7,13 @@ import { REMEMBER_JOB_URL_BASE } from './parse-url.js'
 /** formatExperience가 "N년 이상"으로 읽는 센티널. Wanted가 쓰는 값과 같아야 한다. */
 const NO_UPPER_BOUND = 100
 
+/**
+ * logger_info 자체가 없을 때 넣는 표지. 실제 필터 이름(organization_type 등)과 겹치지
+ * 않게 해서, 로그를 읽는 사람이 "서버가 이 필터를 무시했다"와 "애초에 확인할 방법이
+ * 없었다"를 구분하게 한다.
+ */
+const NO_QUERY_ECHO = 'no_query_echo'
+
 const listItemSchema = z.object({
   id: z.number(),
   title: z.string(),
@@ -41,6 +48,10 @@ const listPageSchema = z.object({
   meta: z.object({
     page: z.number(),
     total_pages: z.number(),
+    // logger_info는 로깅용 부가 정보라 Remember가 계약 없이 언제든 뺄 수 있어 optional로
+    // 둔다 — 하지만 "없다"가 "필터가 다 반영됐다"는 뜻은 아니다. required로 바꾸면 이
+    // 필드가 빠진 응답 전체가 여기서 원인 불명 파싱 에러로 죽는다. 대신 아래
+    // parseRememberListPage가 없는 경우를 "확인 불가 = 무시됨"으로 fail-closed 처리한다.
     logger_info: z.object({
       query_meta_data: z.object({ search: echoSchema }),
     }).optional(),
@@ -88,6 +99,10 @@ export function parseRememberListPage(payload: unknown): RememberListPage {
     if (echo.min_experience == null) ignoredFilters.push('min_experience')
     if (echo.addresses == null) ignoredFilters.push('addresses')
     if (!echo.job_category_ids?.length) ignoredFilters.push('job_category_names')
+  } else {
+    // echo 자체가 없으면 필터가 반영됐는지 검증할 방법이 없다. 이 경우를 "무시 없음"
+    // (빈 배열)으로 읽으면 이 함수의 존재 이유인 안전장치가 fail-open으로 무너진다.
+    ignoredFilters.push(NO_QUERY_ECHO)
   }
 
   const refs = parsed.data.map((item): ExternalRef => ({

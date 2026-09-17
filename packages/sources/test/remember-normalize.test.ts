@@ -22,6 +22,9 @@ test('목록에서 공고 참조를 뽑는다', () => {
 
 // 이 검사가 이 소스의 안전장치다. 서버가 해석한 필터가 메타로 그대로 돌아오는데,
 // 우리가 보낸 값이 null로 돌아왔다면 이름이 틀려 필터가 통째로 무시된 것이다.
+// 네 검출기 전부를 정확한 배열로 검증한다 — toContain 두 개만 쓰면 addresses나
+// job_category_names 분기가 지워져도(페이로드는 그 두 조건도 이미 충족시켜 놓았다)
+// 이 테스트가 계속 green이라 탐지 하나가 조용히 사라져도 못 잡는다.
 test('서버가 무시한 필터를 찾아낸다', () => {
   const ignored = parseRememberListPage({
     data: [],
@@ -32,12 +35,21 @@ test('서버가 무시한 필터를 찾아낸다', () => {
       } } },
     },
   }).ignoredFilters
-  expect(ignored).toContain('organization_type')
-  expect(ignored).toContain('min_experience')
+  expect(ignored).toEqual(['organization_type', 'min_experience', 'addresses', 'job_category_names'])
 })
 
 test('정상 응답에서는 무시된 필터가 없다', () => {
   expect(parseRememberListPage(listFixture).ignoredFilters).toEqual([])
+})
+
+// logger_info는 로깅용 부가 정보라 언제든 빠질 수 있다. 없다고 "필터가 다 반영됐다"로
+// 읽으면(빈 배열) 이 안전장치가 fail-open이 된다 — 확인 불가는 무시로 취급해야 한다.
+test('logger_info 자체가 없으면 확인 불가를 무시로 취급한다', () => {
+  const ignored = parseRememberListPage({
+    data: [],
+    meta: { page: 1, total_pages: 1 },
+  }).ignoredFilters
+  expect(ignored.length).toBeGreaterThan(0)
 })
 
 test('상세를 채점 입력 필드로 옮긴다', () => {
