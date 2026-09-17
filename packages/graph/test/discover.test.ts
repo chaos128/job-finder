@@ -209,3 +209,54 @@ test('같은 배치 안의 새 행끼리는 중복으로 지목하지 않는다'
   expect(result.value.duplicates).toBe(0)
   expect(store.jobs.size).toBe(2)
 })
+
+// 카운트만 확인하면 { jobId, duplicateOf }가 뒤바뀌어도(=기존 원본이 새 행의
+// 중복으로 찍혀도) pairs.length는 그대로라 못 잡는다. 방향까지 확인해야 한다 —
+// 새 행이 원본을 가리켜야 하고, 원본은 duplicateOf가 그대로 null이어야 한다.
+test('기존 공고와 겹치면 새 행이 원본을 가리키고, 원본은 그대로 둔다', async () => {
+  const store = new MemoryStore()
+  const [existing] = await store.insertJobs([
+    {
+      source: 'wanted', externalId: 'w1', position: 'Senior Full Stack Engineer',
+      companyName: '루닛', companyId: 1, addressDistrict: '강남구', addressFull: '서울 강남구',
+      url: 'https://www.wanted.co.kr/wd/w1', dueTime: null,
+    },
+  ])
+
+  const rememberSearch: Search = {
+    id: 'search_remember', source: 'remember',
+    url: 'https://www.remember.co.kr/list', params: rememberParams, enabled: true,
+  }
+  const rememberSource: JobSource = {
+    id: 'remember',
+    parseSearchUrl: () => rememberParams,
+    async *listRefs() {
+      yield {
+        externalId: 'r1',
+        job: {
+          externalId: 'r1', position: '[루닛]Senior Full Stack Engineer · AI Platform',
+          companyName: '(주)루닛', companyId: null, addressDistrict: null, addressFull: null,
+          url: 'https://www.remember.co.kr/job/r1', dueTime: null,
+        },
+      }
+    },
+    async fetchDetail(externalId) { return { externalId, payload: {} } },
+    normalize() {
+      return {
+        annualFrom: null, annualTo: null, intro: null, requirements: null,
+        mainTasks: null, preferredPoints: null, benefits: null, skillTags: [], raw: {},
+      }
+    },
+    parseOpenState: () => ({ closed: false, dueTime: null }),
+  }
+
+  const node = createDiscoverNode({ store, sources: { remember: rememberSource } })
+  const result = await node.run(rememberSearch, { runId: 'run_1' })
+
+  if (!result.ok) throw new Error('unreachable')
+  expect(result.value.duplicates).toBe(1)
+
+  const newJob = [...store.jobs.values()].find((j) => j.externalId === 'r1')!
+  expect(newJob.duplicateOf).toBe(existing!.id)
+  expect(store.jobs.get(existing!.id)!.duplicateOf).toBeNull()
+})

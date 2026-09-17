@@ -67,11 +67,16 @@ export async function runCollect(
 
   try {
     const searches = await store.listEnabledSearches()
+    // concurrency: 1은 예의가 아니라 중복 판정의 정확성 문제다. discover는
+    // insertJobs 전에 listDedupIndex를 읽는데, 검색을 동시에 돌리면 두 검색이
+    // 서로의 새 행을 보지 못한 채로 인덱스를 읽어 교차 중복(같은 날 두 사이트에
+    // 동시에 올라온 공고)을 영영 놓친다 — 그 뒤로는 duplicate_of도 없고 created도
+    // 아니라 흔적조차 안 남는다. 속도를 위해 이 값을 다시 3으로 올리지 마라.
     const discovered = await runNode(
       createDiscoverNode({ store, sources }),
       searches,
       (s) => s.id,
-      { runId, store },
+      { runId, store, concurrency: 1 },
     )
 
     const detailLimit = opts.detailLimit ?? DEFAULT_DETAIL_LIMIT
