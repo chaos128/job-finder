@@ -29,3 +29,16 @@ export function scoreBandClass(total: number): string {
   if (total <= 30) return 'text-neutral-400'
   return ''
 }
+
+/**
+ * 축 한글 라벨의 유일한 정의처. 카드의 미터와 상세의 ScoreBars가 같은 말을 써야
+ * 한다 — 예전에는 카드가 원문 키("conditions"), 상세가 한글("근무 조건")이라
+ * 같은 값을 두 이름으로 부르고 있었다.
+ */
+export const AXIS_LABEL: Record<Axis, string> = {
+  stack: '기술 스택',
+  role: '역할·연차',
+  domain: '도메인',
+  growth: '성장성',
+  conditions: '근무 조건',
+}

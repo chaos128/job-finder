@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BlindRating } from '../_components/blind-rating'
 import { formatExperience } from '../_components/experience'
+import { linkify } from '@/lib/linkify'
 import { BookmarkToggle } from '../_components/bookmark-toggle'
 import { ScoreBars } from '../_components/score-bars'
 import { scoreBandClass } from '../_components/score-visuals'
@@ -16,7 +17,28 @@ function Section({ title, body }: { title: string; body: string | null | undefin
   return (
     <section>
       <h2 className="text-sm font-semibold text-neutral-500">{title}</h2>
-      <p className="mt-2 whitespace-pre-wrap leading-relaxed">{body}</p>
+      {/* whitespace-pre-wrap은 이 p에 그대로 둔다 — 줄바꿈 보존은 부모가 맡고,
+          아래 조각들은 인라인이라 영향받지 않는다.
+          공고 본문에는 URL이 평문으로 박혀 있다(실측 370건 중 79건, URL 236개).
+          그대로 찍으면 주소가 글자로만 남아 누를 수 없다. */}
+      <p className="mt-2 leading-relaxed whitespace-pre-wrap">
+        {linkify(body).map((part, i) =>
+          part.type === 'text' ? (
+            <span key={i}>{part.value}</span>
+          ) : (
+            <a
+              key={i}
+              href={part.href}
+              target="_blank"
+              // 외부에서 온 공고 본문의 주소다 — 창을 열어 주되 이쪽을 넘기지 않는다.
+              rel="noreferrer noopener"
+              className="text-brand underline decoration-brand/40 underline-offset-4 transition-colors hover:decoration-brand"
+            >
+              {part.label}
+            </a>
+          ),
+        )}
+      </p>
     </section>
   )
 }
@@ -62,7 +84,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </header>
 
-      <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <div className="space-y-4 rounded-2xl border border-line bg-white p-5">
         <ScoreBars breakdown={score.breakdown} />
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{score.reasoning}</p>
         <div className="text-xs text-neutral-400">

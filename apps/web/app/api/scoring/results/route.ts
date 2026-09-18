@@ -15,6 +15,25 @@ export const maxDuration = 60
  */
 const AUTO_HIDE_MAX_SCORE = 50
 
+/**
+ * role이 이 점수 이하면 총점과 무관하게 제외한다.
+ *
+ * 왜 총점만으로는 부족한가: 다섯 축이 20점씩 균등해서, 회사 신호가 좋으면 역할이
+ * 안 맞아도 총점이 떠받쳐진다. 실측(백엔드 우선 테크리드 공고 한 건)에서 role 12 ·
+ * conditions 7로 19점을 깎았는데도 domain 18 + growth 20이 끌어올려 72점이 됐다 —
+ * 발송 기준(70)을 넘는 점수다. role·conditions를 0으로 깎아도 53점이 바닥이라
+ * 축 점수만으로는 이 구조를 벗어날 수 없다.
+ *
+ * "내가 할 수 있는 일인가"와 "좋은 회사인가"는 대칭이 아니다. 회사가 아무리 좋아도
+ * 직무가 다르면 지원 자체가 성립하지 않는데, 총점 합산은 그 둘을 같은 무게로 섞는다.
+ * 그래서 role만 별도의 문턱으로 둔다.
+ *
+ * 5인 이유(실측, 제외되지 않은 127건 기준): role<=5는 11건이 걸리고 전부 실제로
+ * 맞지 않는 공고였다(주니어 프론트엔드, 2~7년, 풀스택 개발자, QA 엔지니어).
+ * role<=8로 올리면 54건이 걸려 정상 공고까지 쓸어간다.
+ */
+const AUTO_HIDE_MAX_ROLE = 5
+
 export async function POST(req: Request) {
   const denied = requireBearer(req, process.env.SCORING_TOKEN)
   if (denied) return denied
@@ -60,7 +79,8 @@ export async function POST(req: Request) {
       // 점수 저장의 후속 처리다. saveScore의 try 안에 두면 이 호출이 실패했을 때
       // 아래 catch가 recordScoreFailure를 불러 **방금 저장된 멀쩡한 점수를
       // status='failed'로 덮어쓴다.** 점수는 이미 저장됐으므로 조용히 삼킨다.
-      if (item.total <= AUTO_HIDE_MAX_SCORE) {
+      const roleScore = item.breakdown.role ?? Number.POSITIVE_INFINITY
+      if (item.total <= AUTO_HIDE_MAX_SCORE || roleScore <= AUTO_HIDE_MAX_ROLE) {
         await store.setJobHidden(item.jobId, true).catch(() => {})
       }
     } catch (cause) {

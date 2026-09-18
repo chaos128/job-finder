@@ -16,8 +16,10 @@ export function NavLink({ href, children }: { href: string; children: ReactNode 
     <Link
       href={href}
       className={cn(
-        'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
-        active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100',
+        'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        // 참고한 대시보드의 사이드바 활성 항목과 같은 방식 — 꽉 찬 검정이 아니라
+        // 옅은 액센트 면에 진한 액센트 글자다. 배경 대비 4.72:1로 AA를 넘는다.
+        active ? 'bg-brand-soft text-brand' : 'text-neutral-600 hover:bg-neutral-100',
       )}
     >
       {children}

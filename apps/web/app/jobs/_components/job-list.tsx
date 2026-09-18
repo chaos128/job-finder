@@ -186,7 +186,7 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           placeholder="회사·포지션 검색"
           aria-label="회사명 또는 포지션 검색"
           className={cn(
-            'h-9 w-56 rounded-full px-4 disabled:cursor-not-allowed disabled:opacity-40',
+            'h-9 w-56 rounded-lg border-line px-3.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-40',
           )}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -199,7 +199,7 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           <Input
             type="number" min={0} max={100} step={5}
             disabled={unscoredOnly}
-            className="h-9 w-20 rounded-full text-center disabled:cursor-not-allowed"
+            className="h-9 w-16 rounded-lg border-line text-center text-[13px] disabled:cursor-not-allowed"
             value={filters.minScore ?? ''}
             onChange={(e) => setFilters((f) => ({
               ...f, minScore: e.target.value === '' ? undefined : Number(e.target.value),
@@ -212,11 +212,11 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           aria-pressed={!!filters.bookmarkedOnly}
           onClick={() => setFilters((f) => ({ ...f, bookmarkedOnly: !f.bookmarkedOnly }))}
           className={cn(
-            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'h-9 rounded-lg border px-3.5 text-[13px] font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
             filters.bookmarkedOnly
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+              ? 'border-brand bg-brand text-white'
+              : 'border-line bg-white text-neutral-600 hover:bg-neutral-50 disabled:hover:bg-white',
           )}
         >
           북마크만
@@ -227,11 +227,11 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           aria-pressed={!!filters.unnotifiedOnly}
           onClick={() => setFilters((f) => ({ ...f, unnotifiedOnly: !f.unnotifiedOnly }))}
           className={cn(
-            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'h-9 rounded-lg border px-3.5 text-[13px] font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
             filters.unnotifiedOnly
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+              ? 'border-brand bg-brand text-white'
+              : 'border-line bg-white text-neutral-600 hover:bg-neutral-50 disabled:hover:bg-white',
           )}
         >
           미발송만
@@ -244,11 +244,11 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           aria-pressed={!!filters.hiddenOnly}
           onClick={() => setFilters((f) => ({ ...f, hiddenOnly: !f.hiddenOnly }))}
           className={cn(
-            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'h-9 rounded-lg border px-3.5 text-[13px] font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
             filters.hiddenOnly
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+              ? 'border-brand bg-brand text-white'
+              : 'border-line bg-white text-neutral-600 hover:bg-neutral-50 disabled:hover:bg-white',
           )}
         >
           제외만
@@ -262,11 +262,11 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           aria-pressed={duplicatesOnly}
           onClick={() => setDuplicatesOnly((v) => !v)}
           className={cn(
-            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'h-9 rounded-lg border px-3.5 text-[13px] font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
             duplicatesOnly
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 disabled:hover:bg-white',
+              ? 'border-brand bg-brand text-white'
+              : 'border-line bg-white text-neutral-600 hover:bg-neutral-50 disabled:hover:bg-white',
           )}
         >
           중복
@@ -277,11 +277,11 @@ export function JobList({ initialRows, initialCursor, initialTotal }: {
           aria-pressed={unscoredOnly}
           onClick={() => setUnscoredOnly((v) => !v)}
           className={cn(
-            'h-9 rounded-full border px-4 font-medium transition-colors',
+            'h-9 rounded-lg border px-3.5 text-[13px] font-medium transition-colors',
             'disabled:cursor-not-allowed disabled:opacity-40',
             unscoredOnly
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100',
+              ? 'border-brand bg-brand text-white'
+              : 'border-line bg-white text-neutral-600 hover:bg-neutral-50',
           )}
         >
           미채점만

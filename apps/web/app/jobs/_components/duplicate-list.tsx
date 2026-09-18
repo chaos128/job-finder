@@ -35,7 +35,7 @@ export function DuplicateList() {
   const truncated = rows !== null && total > rows.length
 
   return (
-    <section className="space-y-3 border-t border-neutral-200 pt-6">
+    <section className="space-y-3 border-t border-line pt-6">
       <h2 className="text-lg font-medium">
         중복 {total}건
         {truncated && (
@@ -69,7 +69,7 @@ export function DuplicateList() {
           {rows.map((row) => (
             <div
               key={row.jobId}
-              className="flex items-start gap-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
+              className="flex items-start gap-4 rounded-2xl border border-line bg-white p-5"
             >
               <div className="w-14 shrink-0 text-center text-sm font-medium text-neutral-400">
                 중복

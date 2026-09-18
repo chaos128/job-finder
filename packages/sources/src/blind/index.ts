@@ -42,15 +42,32 @@ const COMPANY_BLOCK = new RegExp(
  * 괄호 안 별칭까지 시도하는 이유: Blind가 서비스명으로도 법인을 찾아준다
  * (캐치테이블 → 와드). 원문이 법인명일 때와 서비스명일 때 양쪽을 커버한다.
  */
+/**
+ * 법인 표기. **`(주)` 괄호 형태가 가장 흔하다** — 운영 실측에서 미등록으로 확정된
+ * 174곳 중 82곳(47%)이 `(주)`로 시작했고, `(주)`가 붙은 회사 중 별점이 잡힌 곳은
+ * 한 곳도 없었다. 한 글자 `㈜`와 `주식회사`만 떼고 있어서 생긴 구멍이다.
+ * 전각 괄호(`（주）`)도 같이 받는다 — 한글 입력기에서 흔히 섞여 들어온다.
+ */
+const LEGAL_FORM = '주식회사|㈜|\\(주\\)|（주）'
+const LEGAL_PREFIX = new RegExp(`^(?:${LEGAL_FORM})\\s*`)
+const LEGAL_SUFFIX = new RegExp(`\\s*(?:${LEGAL_FORM})$`)
+
+function stripLegalForm(name: string): string {
+  return name.replace(LEGAL_PREFIX, '').replace(LEGAL_SUFFIX, '').trim()
+}
+
 export function searchCandidates(companyName: string): string[] {
-  const raw = companyName.trim()
+  // 법인 표기를 **먼저** 떼고 나서 괄호 별칭을 분해한다. 순서가 반대면
+  // "노써치(주)"에서 괄호 안의 "주"가 후보로 올라가 한 글자로 Blind를 뒤져
+  // 엉뚱한 회사를 잡는다(실제로 그렇게 나왔다).
+  const raw = stripLegalForm(companyName.trim())
   const out = [raw]
   const paren = /^(.*?)\s*[（(]([^)）]+)[)）]\s*$/.exec(raw)
   if (paren) out.push(paren[1]!.trim(), paren[2]!.trim())
 
   const seen = new Set<string>()
   return out
-    .map((c) => c.replace(/^(주식회사|㈜)\s*/, '').replace(/\s*(주식회사|㈜)$/, '').trim())
+    .map(stripLegalForm)
     .filter((c) => c.length > 0 && !seen.has(c) && (seen.add(c), true))
 }
 

@@ -9,8 +9,8 @@ function Tile({ label, value, caption, warn, warnLabel }: {
     // 배지만으로는 라벨을 직접 봐야 눈에 띈다 — 링을 더해 줄 전체를 훑을 때도
     // 경고 타일이 나머지 셋과 다르다는 게 주변 시야에서 걸리게 한다.
     <div
-      className={`rounded-xl border bg-white p-5 shadow-sm ${
-        warn ? 'border-amber-300 ring-1 ring-amber-300' : 'border-neutral-200'
+      className={`rounded-2xl border bg-white p-5 ${
+        warn ? 'border-amber-300 ring-1 ring-amber-300' : 'border-line'
       }`}
     >
       <div className="flex items-center gap-2">

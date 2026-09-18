@@ -8,4 +8,15 @@
   /* Poppins에는 한글 글리프가 없다. 화면 대부분이 한국어이므로 실제 적용은
      숫자·영문·제목이고 한글은 뒤 폴백으로 떨어진다. */
   --font-sans: var(--font-poppins), Pretendard, -apple-system, system-ui, sans-serif;
+
+  /* 배경을 순회색(neutral-50 #FAFAFA)이 아니라 보라가 아주 살짝 도는 회색으로 둔다.
+     흰 카드와의 명도차가 그대로여도 색상차가 생겨 카드가 "떠" 보인다 — 참고한
+     대시보드가 평평해 보이지 않는 이유가 그림자가 아니라 이 색상차다. */
+  --color-canvas: #F6F7FB;
+  /* 카드 경계. neutral-200(#E5E5E5)보다 옅고 살짝 푸른 쪽이라 선이 아니라
+     면의 끝처럼 읽힌다. 그림자를 거의 쓰지 않는 대신 이 선이 경계를 맡는다. */
+  --color-line: #E9EAF2;
+  /* 액센트. 흰 배경 대비 실측 5.41:1로 본문 크기 텍스트에도 AA를 넘는다. */
+  --color-brand: #5B57E0;
+  --color-brand-soft: #EFEEFD;
 }

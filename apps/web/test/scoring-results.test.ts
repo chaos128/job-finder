@@ -109,6 +109,24 @@ test.each([
   else expect(mocked.store.setJobHidden).not.toHaveBeenCalled()
 })
 
+// role 게이트. 총점이 높아도 직무가 다르면 목록에 남지 않아야 한다 — 다섯 축이
+// 균등해서 회사 신호(domain·growth)가 좋으면 role이 낮아도 총점이 떠받쳐지기 때문이다.
+// 실측: role 12 · conditions 7로 19점을 깎았는데도 domain 18 + growth 20이 끌어올려
+// 72점이 나왔다(발송 기준 70을 넘는다).
+test.each([
+  [5, true], [4, true], [0, true], [6, false], [12, false],
+])('총점이 높아도 role이 %i면 자동 제외 호출 = %s', async (role, shouldHide) => {
+  const id = randomUUID()
+  // 총점 76 — 자동 제외의 점수 문턱(50)과 발송 기준(70)을 모두 넘긴다.
+  const breakdown = { role, stack: 20, domain: 18, growth: 20, conditions: 18 - role }
+  const total = Object.values(breakdown).reduce((a, b) => a + b, 0)
+  const res = await POST(request([{ ...validItem(id), total, breakdown }]))
+
+  expect((await res.json()).accepted).toBe(1)
+  if (shouldHide) expect(mocked.store.setJobHidden).toHaveBeenCalledWith(id, true)
+  else expect(mocked.store.setJobHidden).not.toHaveBeenCalled()
+})
+
 // 제외 처리는 점수 저장의 후속 편의다. 이게 실패했다고 recordScoreFailure가 불리면
 // 방금 저장된 멀쩡한 점수가 status='failed'로 덮여 큐에서 영구 이탈할 수 있다.
 test('자동 제외가 실패해도 점수는 저장된 것으로 남고 실패로 기록되지 않는다', async () => {

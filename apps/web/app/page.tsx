@@ -32,7 +32,7 @@ export default async function Page() {
         </p>
         <Link
           href="/jobs"
-          className="inline-block rounded-md bg-neutral-900 px-6 py-3 text-white hover:bg-neutral-700"
+          className="inline-block rounded-lg bg-brand px-6 py-3 font-medium text-white transition-colors hover:bg-brand/90"
         >
           채점된 공고 보기 →
         </Link>
@@ -45,7 +45,7 @@ export default async function Page() {
 
       <section className="space-y-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">어떻게 도는가</h2>
-        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-line bg-white p-6">
           <ol className="space-y-6">
             {STEPS.map((s, i) => (
               <li key={s.title} className="flex gap-5">
@@ -67,7 +67,7 @@ export default async function Page() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           무엇으로 채점하는가
         </h2>
-        <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-line bg-white p-6">
           <p className="text-neutral-600">다섯 축에 각각 0~20점, 합쳐서 100점 만점이다.</p>
           <dl className="mt-4 space-y-4">
             {AXES.map(([key, label, desc]) => (
@@ -83,7 +83,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <footer className="border-t border-neutral-200 pt-8 text-sm text-neutral-400">
+      <footer className="border-t border-line pt-8 text-sm text-neutral-400">
         개인용 서비스입니다. 채점 기준은 소유자의 이력서와 선호 조건에 맞춰져 있습니다.
       </footer>
     </main>
