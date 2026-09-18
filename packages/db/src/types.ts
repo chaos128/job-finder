@@ -195,6 +195,15 @@ export interface DashboardRow {
   /** 경력 요건. 0007 이전에 수집된 행이나 상세 조회 전이면 null. */
   annualFrom: number | null
   annualTo: number | null
+  /**
+   * 근무지의 구·시(`강남구`). 목록에는 이것만 싣는다 — addressFull은 도로명까지
+   * 들어간 한 줄이라 카드에서 요약·미터를 밀어낸다. 상세는 getJobDetail이 Job
+   * 전체를 주므로 따로 올릴 필요가 없다.
+   *
+   * Remember는 지역을 특정하지 못한 공고에 `'전체'`를 넣어 보낸다(실측 123건 중
+   * 10건). 값이 있는 척하는 "정보 없음"이라, 거르는 것은 화면의 몫이다.
+   */
+  addressDistrict: string | null
 }
 
 /**

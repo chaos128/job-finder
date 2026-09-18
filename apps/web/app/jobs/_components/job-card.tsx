@@ -3,8 +3,9 @@
 import { Button, cn } from "@job-finder/ui";
 import { axisPercent } from "@/lib/dashboard";
 import type { DashboardRow } from "@job-finder/db";
-import { Bookmark, RotateCcw, X, } from "lucide-react";
+import { Bookmark, MapPin, RotateCcw, X, } from "lucide-react";
 import Link from "next/link";
+import { districtLabel } from "./address";
 import { BlindRating } from "./blind-rating";
 import { formatExperience } from "./experience";
 import { markDetailNavigation } from "./list-cache";
@@ -23,6 +24,7 @@ export function JobCard({
   onToggleHidden: (jobId: string, next: boolean) => void;
 }) {
   const experience = formatExperience(row.annualFrom, row.annualTo);
+  const district = districtLabel(row.addressDistrict);
   return (
     <div
       className={cn(
@@ -140,6 +142,17 @@ export function JobCard({
             {row.dueTime ? `마감 ${row.dueTime}` : "상시채용"}
           </span>
         </div>
+        {/* 근무지는 경력·마감과 같은 1차 조건이지만 한 줄 아래로 내린다 — 같은 줄에
+            넣으면 셋이 좁은 폭에서 서로 밀어내며 줄바꿈이 제각각이 된다.
+            구·시만 그린다(addressFull은 도로명까지라 카드에서 요약을 밀어낸다).
+            핀 아이콘을 붙이는 이유: 경력·마감과 달리 "강남구"는 단위가 없어 앞의
+            회색 캡션들과 구별되지 않는다. */}
+        {district && (
+          <div className="flex items-center gap-1 text-sm text-neutral-500">
+            <MapPin className="size-3.5 shrink-0" aria-hidden />
+            <span>{district}</span>
+          </div>
+        )}
         {/* 줄 수 상한을 두지 않는다. 포지션 제목과 같은 이유로, 잘린 요약은 무슨 일인지
             판단할 재료를 없앤다. 루브릭이 summary를 400자로 제한하고 실측(168건)도
             170~313자에 몰려 있어 카드가 무한정 길어지지 않는다. */}

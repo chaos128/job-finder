@@ -1,5 +1,6 @@
 import { getStore } from '@/lib/store'
 import { cn } from '@job-finder/ui'
+import { MapPin } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { BlindRating } from '../_components/blind-rating'
@@ -48,6 +49,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const detail = await getStore().getJobDetail(id)
   if (!detail) notFound()
   const { job, score, blind } = detail
+  const experience = formatExperience(job.annualFrom ?? null, job.annualTo ?? null)
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 p-6">
@@ -70,7 +72,25 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           )}
         </div>
         <h1 className="text-2xl font-bold">{job.position}</h1>
-        <div className="flex items-center gap-4 pt-2">
+        {/* 경력·마감·근무지는 예전에 본문 맨 아래(기술 태그 다음)에 회색 캡션으로
+            깔려 있었다 — 지원 여부를 가르는 1차 조건인데 공고 전문을 다 읽어야
+            나왔다. 카드가 이미 제목 바로 아래에 두고 있으므로 위치를 맞춘다.
+            경력과 마감을 함께 옮기는 이유: 둘은 한 쌍이고, 카드도 한 줄에 묶어
+            그린다(둘이 갈라지면 같은 정보가 화면마다 다른 자리에 있게 된다). */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-sm">
+          {experience && <span className="font-medium text-neutral-700">{experience}</span>}
+          <span className="text-neutral-500">{job.dueTime ? `마감 ${job.dueTime}` : '상시채용'}</span>
+        </div>
+        {/* 상세는 full을 쓴다 — 카드의 구·시로는 갈 수 있는 거리인지 판단이 안 된다.
+            district를 같이 그리지 않는 이유: Remember의 full은 "서울특별시 강남구"라
+            구·시를 이미 품고 있어 "강남구 / 서울특별시 강남구"가 된다. */}
+        {job.addressFull && (
+          <div className="flex items-center gap-1 pt-0.5 text-sm text-neutral-500">
+            <MapPin className="size-3.5 shrink-0" aria-hidden />
+            <span>{job.addressFull}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-4 pt-3">
           {/* KPI 타일과 같은 크기 위계(text-3xl font-semibold tabular-nums). 색 밴드는 카드와 동일 기준. */}
           <span className={cn('text-3xl font-semibold tabular-nums', scoreBandClass(score.total))}>
             {score.total}
@@ -104,13 +124,6 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             <p className="mt-2 text-sm">{job.skillTags.join(' · ')}</p>
           </section>
         ) : null}
-        <div className="flex items-center gap-3 text-sm text-neutral-500">
-          {/* 카드와 같은 순서·같은 규칙으로 둔다. */}
-          {formatExperience(job.annualFrom ?? null, job.annualTo ?? null) && (
-            <span>{formatExperience(job.annualFrom ?? null, job.annualTo ?? null)}</span>
-          )}
-          <span>{job.dueTime ? `마감 ${job.dueTime}` : '상시채용'}</span>
-        </div>
       </div>
     </main>
   )

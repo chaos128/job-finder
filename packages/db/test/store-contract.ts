@@ -46,11 +46,15 @@ async function seedSearch(store: Store, source: Source): Promise<void> {
 
 const seedScored = async (
   store: Store,
-  specs: { ext: string; total: number; companyName?: string; position?: string }[],
+  specs: {
+    ext: string; total: number; companyName?: string; position?: string
+    addressDistrict?: string | null
+  }[],
 ) => {
   const created = await store.insertJobs(specs.map((s) => job(s.ext, {
     ...(s.companyName === undefined ? {} : { companyName: s.companyName }),
     ...(s.position === undefined ? {} : { position: s.position }),
+    ...(s.addressDistrict === undefined ? {} : { addressDistrict: s.addressDistrict }),
   })))
   for (const [i, spec] of specs.entries()) {
     await store.saveScore({
@@ -278,6 +282,18 @@ export function describeStoreContract(
       expect(page.nextCursor).toEqual(
         { hidden: false, total: 80, jobId: page.rows[1]!.jobId },
       )
+    })
+
+    // 카드가 그리는 값이라 목록 질의에 실려야 한다. null을 함께 보는 이유: 컬럼이
+    // nullable이라 두 구현이 "없음"을 다르게 표현하면(빈 문자열 vs null) 카드의
+    // 분기가 한쪽에서만 맞는다.
+    test('listDashboardJobs는 근무지 구·시를 함께 싣는다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90, addressDistrict: '성동구' },
+        { ext: '2', total: 80, addressDistrict: null },
+      ])
+      const page = await store.listDashboardJobs({ limit: 10 })
+      expect(page.rows.map((r) => r.addressDistrict)).toEqual(['성동구', null])
     })
 
     // 동점이 페이지 경계에 걸리면 total 단독 커서는 행을 건너뛰거나 중복시킨다.

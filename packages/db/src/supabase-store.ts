@@ -41,7 +41,7 @@ const NOTIFY_CANDIDATE_SELECT = `*, jobs(
 // raw와 JD 본문은 제외한다 — 목록에서 쓰지 않는데 가장 크다. reasoning도 뺐다 —
 // 채점 근거 전문은 상세에서만 쓰고, 목록 요약은 채점 시 함께 받은 summary를 그대로 싣는다.
 const DASHBOARD_SELECT =
-  'total, breakdown, notified_at, summary, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden, source, duplicate_of, annual_from, annual_to)'
+  'total, breakdown, notified_at, summary, jobs!inner(id, company_name, position, url, due_time, bookmarked, hidden, source, duplicate_of, annual_from, annual_to, address_district)'
 
 interface JobRow {
   id: string; source: string; external_id: string; position: string
@@ -85,6 +85,7 @@ type DashboardJoinRow = {
     due_time: string | null; bookmarked: boolean; hidden: boolean
     source: Source; duplicate_of: string | null
     annual_from: number | null; annual_to: number | null
+    address_district: string | null
   }
 }
 
@@ -491,6 +492,7 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
         total: r.total, breakdown: r.breakdown, notifiedAt: r.notified_at,
         summary: r.summary,
         annualFrom: r.jobs.annual_from ?? null, annualTo: r.jobs.annual_to ?? null,
+        addressDistrict: r.jobs.address_district,
       }))
 
       // 페이지가 확정된 뒤에 별점을 붙인다 — 버킷별로 물으면 왕복이 두 번 난다.
