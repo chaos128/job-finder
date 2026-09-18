@@ -5,32 +5,42 @@
 /**
  * 사용자가 친 문자열 → 실제로 걸 검색어. null이면 필터를 걸지 않는다.
  *
- * TODO(human): 와일드카드 정책을 정해 주세요.
+ * **정책: `%`와 `*`는 버리고 `_`는 남긴다.** 셋 다 SQL LIKE 와일드카드로 새어 들어가고
+ * 이스케이프가 통하지 않는데(운영 DB 실측 — 전체 370건 기준), 셋의 처지가 같지 않다.
  *
- * PostgREST의 `ilike`는 값 안의 `*`를 SQL LIKE의 `%`로 바꿔 보냅니다. 그런데 사용자가
- * 직접 친 `%`와 `_`도 그대로 LIKE 와일드카드로 새어 들어가고, **이스케이프가 통하지
- * 않습니다**(운영 DB 실측 — 전체 296건 기준):
+ *   position.ilike.*%*   → 370건 (전건)   `\%`를 붙여도 그대로 와일드카드다
+ *   position.ilike.*_*   → 370건 (전건)   `_`는 "아무 글자 하나"라 사실상 전건
+ *   position.ilike.***   → 370건 (전건)   `*`는 PostgREST가 `%`로 바꾼다
  *
- *   company_name.ilike."*%*"    → 296건 (전건)
- *   company_name.ilike."*\%*"   → 296건 (역슬래시를 붙여도 그대로 와일드카드)
- *   company_name.ilike."*_*"    → 296건 (`_`는 "아무 글자 하나"라 사실상 전건)
- *   company_name.ilike."*\_*"   → 296건
+ * `%`와 `*`는 회사명·포지션 370건 어디에도 **한 번도 나오지 않는다**. 글자 그대로
+ * 찾는 길이 막혀 있고 찾을 대상도 없으니, 남겨 두면 과다 매치만 만든다 — 버린다.
  *
- * 즉 "이스케이프해서 글자 그대로 찾기"는 이 경로로는 불가능합니다. 선택지는 대략:
+ * `_`는 다르다. 실재하는 포지션 둘에 들어 있다:
  *
- *   (가) 제거한다        — `%`·`_`를 빼고 남은 걸로 검색. "50%" → "50"
- *   (나) 그대로 둔다     — 와일드카드로 쓰게 놔둔다. "카카오%페이"가 의미를 가진다
- *   (다) 필터를 끈다     — 와일드카드만 있는 검색어면 null을 반환해 전건을 보여준다
+ *   ICT융합연구소_UI/UX Front, Backend 개발자
+ *   풀스택_FDE(Forward Deployed Engineer)
  *
- * 최소 길이 제한도 같이 정해 주세요 — 한 글자(예: "e")면 거의 전건이 걸리는데,
- * 그래도 사용자가 친 대로 보여줄지 무시할지는 취향입니다.
+ * 그리고 `_`를 와일드카드로 흘려보내도 **글자 그대로의 `_`를 포함한다**("아무 글자
+ * 하나"에 `_` 자신도 해당한다). 실측으로 갈린다:
  *
- * 아래는 아직 아무 정책도 없는 상태입니다(공백만 정리). 그대로 두면 `%` 한 글자에
- * 전건이 나옵니다.
+ *   position.ilike.*풀스택_FDE*   → 1건   남기면 찾는다
+ *   position.ilike.*풀스택FDE*    → 0건   빼면 못 찾는다
+ *
+ * 즉 `_`를 버리면 사용자가 목록에서 제목을 복사해 붙여 넣는 순간 0건이 된다.
+ * 남기면 이론상 과다 매치(`풀스택XFDE`도 걸린다)지만, 실제로 잃는 것은 없고 얻는
+ * 것은 "붙여 넣으면 찾아진다"이다. 과다 매치 쪽을 택한다.
+ *
+ * 남은 것이 없으면(`%` 한 글자 같은 경우) null이라 필터가 아예 걸리지 않는다 —
+ * 전건이 나온다. "와일드카드만 친 검색어"와 "빈 검색어"를 같게 다루는 셈이다.
+ *
+ * **최소 길이 제한은 두지 않는다.** 한 글자면 거의 전건이 걸리지만, 입력은 디바운스
+ * 되고 화면에 건수가 함께 뜬다 — 약하게 걸리는 필터는 사용자가 보고 더 치면 되는데,
+ * 조용히 무시하는 필터는 입력창이 고장 난 것처럼 보인다.
  */
 export function normalizeSearchTerm(raw: string | undefined): string | null {
-  const trimmed = (raw ?? '').trim()
-  return trimmed === '' ? null : trimmed
+  // 버린 뒤에 다시 trim한다 — `"% "`는 제거 후 공백만 남는다.
+  const stripped = (raw ?? '').replace(/[%*]/g, '').trim()
+  return stripped === '' ? null : stripped
 }
 
 /**
@@ -50,8 +60,19 @@ export function toIlikePattern(term: string): string {
   return `"*${escaped}*"`
 }
 
-/** MemoryStore용. SupabaseStore의 `ilike` 부분 일치와 같은 뜻이어야 한다. */
+/**
+ * MemoryStore용. SupabaseStore의 `ilike` 부분 일치와 **같은 뜻**이어야 한다.
+ *
+ * 그래서 단순 부분 문자열 비교가 아니다 — normalizeSearchTerm이 `_`를 남기기로 한
+ * 이상, 이쪽도 `_`를 "아무 글자 하나"로 읽어야 두 구현이 갈리지 않는다. 남겨 두면
+ * `풀스택XFDE`를 담은 행이 SupabaseStore에서는 `풀스택_FDE`로 걸리고 여기서는
+ * 안 걸린다 — 계약 테스트가 잡지 못하는 종류의 어긋남이 된다.
+ *
+ * `%`·`*`는 normalizeSearchTerm이 이미 버렸으므로 여기 올 수 없다.
+ */
 export function matchesSearchTerm(term: string, ...fields: string[]): boolean {
-  const needle = term.toLowerCase()
-  return fields.some((f) => f.toLowerCase().includes(needle))
+  // 정규식 메타문자를 먼저 막고(이 목록에 `_`는 없다), 그다음 `_`만 `.`로 푼다.
+  const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/_/g, '.')
+  const re = new RegExp(pattern, 'i')
+  return fields.some((f) => re.test(f))
 }

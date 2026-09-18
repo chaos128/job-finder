@@ -432,6 +432,32 @@ export function describeStoreContract(
       expect(comma.rows).toEqual([])
     })
 
+    // `%`·`_`·`*`는 SQL LIKE 와일드카드로 새어 들어가고 이스케이프가 통하지 않는다.
+    // normalizeSearchTerm이 앞의 둘을 버리고 `_`만 남기기로 했는데, 그 뜻이 두
+    // 구현에서 같아야 한다 — MemoryStore가 부분 문자열 비교로 남으면 `_`가 든
+    // 검색어에서 조용히 갈린다.
+    test('search의 와일드카드 처리는 두 구현이 같다', async () => {
+      await seedScored(store, [
+        { ext: '1', total: 90, position: '풀스택_FDE(Forward Deployed Engineer)' },
+        { ext: '2', total: 80, position: 'Frontend Engineer' },
+      ])
+      // `_`는 남는다 — 목록에서 제목을 복사해 붙여 넣으면 찾아져야 한다.
+      const underscore = await store.listDashboardJobs({ limit: 10, search: '풀스택_FDE' })
+      expect(underscore.rows.map((r) => r.total)).toEqual([90])
+
+      // `_`를 버리면 이 검색은 0건이 된다. 버리지 않았음을 뒤집어 확인한다.
+      const stripped = await store.listDashboardJobs({ limit: 10, search: '풀스택FDE' })
+      expect(stripped.rows).toEqual([])
+
+      // `%`·`*`는 버리므로 남은 글자로 찾는다 — 와일드카드로 동작하지 않는다.
+      const pct = await store.listDashboardJobs({ limit: 10, search: 'Front%end' })
+      expect(pct.rows.map((r) => r.total)).toEqual([80])
+
+      // 와일드카드만 친 검색어는 빈 검색어와 같다 — 전건이다.
+      expect((await store.listDashboardJobs({ limit: 10, search: '%' })).rows).toHaveLength(2)
+      expect((await store.listDashboardJobs({ limit: 10, search: '*' })).rows).toHaveLength(2)
+    })
+
     test('total은 limit에 잘리기 전 전체 건수이고, 이어보기 페이지에서는 null이다', async () => {
       await seedScored(store, [
         { ext: '1', total: 90 }, { ext: '2', total: 80 }, { ext: '3', total: 70 },
