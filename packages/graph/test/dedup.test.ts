@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import type { DedupCandidate } from '@job-finder/db'
-import { findDuplicate, normalizeCompany, normalizePosition } from '../src/index.js'
+import { companyKeys, findDuplicate, normalizeCompany, normalizePosition } from '../src/index.js'
 
 const c = (
   id: string, source: 'wanted' | 'remember', companyName: string, position: string,
@@ -41,10 +41,67 @@ test('회사명이 통째로 지워지면 원래 이름으로 물러선다', () 
   expect(normalizeCompany('(주)')).toBe('(주)')
 })
 
-test('직무명에서 대괄호 블록과 공백을 지운다', () => {
-  expect(normalizePosition('[루닛]Senior Full Stack Engineer · AI Platform'))
+// 대괄호는 **회사명일 때만** 벗긴다. 운영 실측에서 대괄호 121개 중 회사명은
+// 17개뿐이고 나머지는 서비스·조직·전형 표기라, 전부 벗기면 같은 회사의 다른 제품
+// 공고가 뭉친다(아래 토스 테스트).
+test('직무명에서 회사명 대괄호와 공백을 지운다', () => {
+  expect(normalizePosition('[루닛]Senior Full Stack Engineer · AI Platform', new Set(['루닛'])))
     .toBe('seniorfullstackengineer·aiplatform')
   expect(normalizePosition('Senior Full Stack Engineer')).toBe('seniorfullstackengineer')
+})
+
+test('회사명이 아닌 대괄호는 남겨서 비교에 쓴다', () => {
+  expect(normalizePosition('[병역특례] iOS Developer', new Set(['페이타랩'])))
+    .toBe('[병역특례]iosdeveloper')
+})
+
+// 괄호 밖만 보면 놓치는 실측 쌍 — 정답이 괄호 안에 있다.
+test('괄호 안 이름도 회사 후보로 삼는다', () => {
+  expect(companyKeys('에스케이일렉링크(SK일렉링크)')).toContain('sk일렉링크')
+  expect(companyKeys('와드(캐치테이블)')).toContain('캐치테이블')
+  // 괄호 밖 대표 이름도 그대로 남는다.
+  expect(companyKeys('와드(캐치테이블)')).toContain('와드')
+  // 법인격만 든 괄호는 후보가 되지 않는다.
+  expect(companyKeys('(주)루닛')).toEqual(new Set(['루닛']))
+})
+
+// 운영에서 양쪽 다 목록에 뜨던 교차 중복 세 쌍. 본문이 동일한 같은 공고다.
+test('운영에서 놓치던 교차 중복을 잡는다', () => {
+  const sk = [c('a', 'wanted', '에스케이일렉링크(SK일렉링크)', 'Frontend Engineer')]
+  expect(findDuplicate(c('b', 'remember', 'SK일렉링크(주)', 'Frontend Engineer'), sk)?.id)
+    .toBe('a')
+
+  const umos = [c('a', 'wanted', '유모스원', 'Frontend Engineer (TMS)')]
+  expect(findDuplicate(
+    c('b', 'remember', '(주)유모스원', 'Frontend Engineer (Transportation Management System)'),
+    umos,
+  )?.id).toBe('a')
+
+  const genie = [c('a', 'wanted', '지니파이', 'AI 프로덕트 엔지니어 (5년 이상)')]
+  expect(findDuplicate(
+    c('b', 'remember', '지니파이(주)', 'AI 프로덕트 엔지니어 (경력 5년 이상)'), genie,
+  )?.id).toBe('a')
+})
+
+// 유모스원은 Wanted에 (TMS)·(FMS)·(WMS) 세 건이 따로 있다. 괄호를 그냥 버리면
+// Remember의 TMS 하나가 셋 다와 뭉친다 — 이니셜이 다르면 거부해야 한다.
+test('괄호 안 약어가 다르면 같은 회사·같은 머리여도 중복이 아니다', () => {
+  const index = [
+    c('fms', 'wanted', '유모스원', 'Frontend Engineer (FMS)'),
+    c('wms', 'wanted', '유모스원', 'Frontend Engineer (WMS)'),
+  ]
+  expect(findDuplicate(
+    c('x', 'remember', '(주)유모스원', 'Frontend Engineer (Transportation Management System)'),
+    index,
+  )).toBeNull()
+})
+
+// 대괄호를 전부 벗기던 시절에 뭉치던 쌍. 토스인슈어런스와 토스인컴은 다른 공고다.
+test('같은 회사의 다른 제품 공고는 중복으로 보지 않는다', () => {
+  const index = [c('a', 'wanted', '비바리퍼블리카(토스)', '[토스인슈어런스] Frontend Developer')]
+  expect(findDuplicate(
+    c('b', 'remember', '(주)비바리퍼블리카', '[토스인컴] Frontend Developer (Senior)'), index,
+  )).toBeNull()
 })
 
 // Remember는 제목에 [회사명] 접두와 · 팀명 접미를 붙이는 경우가 많다.

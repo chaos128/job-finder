@@ -735,6 +735,11 @@ export function createSupabaseStore(url: string, serviceKey: string): SupabaseSt
       const rows = unwrap<Array<{
         id: string; source: Source; company_name: string; position: string
       }>>(
+        // hidden=false 조건을 지우지 마라. 제외된 행까지 후보로 삼으면 "선행 행이
+        // 저점수로 제외된 뒤 다른 소스에서 들어온 공고"를 몇 건 더 잡을 수는 있지만
+        // (실측 4쌍, 전부 양쪽 다 제외 상태라 목록에 보이지도 않는다), 그 대가로
+        // 마감돼 숨겨진 옛 행이 후보로 남아 새 external_id로 다시 올라온 공고를
+        // 중복으로 찍어 영원히 채점되지 않게 만든다. 계약 테스트가 지키는 보장이다.
         await db.from('jobs').select('id, source, company_name, position')
           .is('duplicate_of', null).eq('hidden', false)
           .order('first_seen_at', { ascending: true }).order('id', { ascending: true }),
